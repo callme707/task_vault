@@ -1,0 +1,45 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent; }
+body {
+  font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.18);
+}
+.quick-card {
+  width: calc(100vw - 24px);
+  height: calc(100vh - 24px);
+  background: #fff;
+  border: 1px solid #d8dee9;
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hint { color: #8a919f; font-size: 12px; }
+textarea {
+  flex: 1;
+  resize: none;
+  border: 1px solid #e4e7ec;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 15px;
+  line-height: 1.6;
+  outline: none;
+  font-family: inherit;
+}
+textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+.actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+#status { color: #8a919f; font-size: 12px; margin-right: auto; }
+.btn {
+  border: 1px solid #e4e7ec;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }

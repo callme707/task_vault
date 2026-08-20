@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>任务记录 · 工作台</title>
+  <link rel="stylesheet" href="main.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">📥 任务记录</div>
+    <div class="actions">
+      <button id="btn-process-pending" class="btn ghost">AI 整理待处理</button>
+      <button id="btn-refresh" class="btn ghost">刷新</button>
+      <button id="btn-settings" class="btn ghost">设置</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="panel inbox-panel">
+      <div class="panel-head">
+        <h2>临时库 · 收件箱</h2>
+        <span id="inbox-count" class="count"></span>
+      </div>
+      <div id="inbox-list" class="list"></div>
+    </section>
+
+    <section class="panel detail-panel">
+      <div class="panel-head"><h2>记录详情 / 转正草稿</h2></div>
+      <div id="detail-empty" class="empty">在左侧选择一条临时记录</div>
+      <div id="detail-content" class="detail hidden">
+        <div class="raw-block">
+          <div class="block-title">原始记录（永不删除）</div>
+          <pre id="raw-text"></pre>
+          <div class="ai-line">
+            <span id="ai-status" class="badge"></span>
+            <span id="ai-model"></span>
+            <button id="btn-reparse" class="btn small">重新解析</button>
+          </div>
+        </div>
+        <div class="block-title">AI 解析结果</div>
+        <div id="ai-summary" class="ai-summary"></div>
+        <div class="block-title">转正草稿（可修改）</div>
+        <div class="form-grid">
+          <label>标题 <input id="f-title" /></label>
+          <label>类型
+            <select id="f-kind"><option value="task">任务</option><option value="requirement">需求</option><option value="idea">想法</option><option value="note">记录</option></select>
+          </label>
+          <label>优先级
+            <select id="f-priority"><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
+          </label>
+          <label>状态
+            <select id="f-status"><option value="todo">待办</option><option value="in_progress">进行中</option><option value="blocked">阻塞</option><option value="done">完成</option></select>
+          </label>
+          <label>截止时间 <input id="f-due" type="datetime-local" /></label>
+          <label>预估工时(分钟) <input id="f-estimate" type="number" min="0" /></label>
+          <label>计划开始 <input id="f-start" type="datetime-local" /></label>
+          <label>计划结束 <input id="f-end" type="datetime-local" /></label>
+        </div>
+        <label class="full">描述 <textarea id="f-description"></textarea></label>
+        <label class="full">标签（逗号分隔） <input id="f-tags" /></label>
+        <div class="row-actions">
+          <button id="btn-promote" class="btn primary">转入主数据库</button>
+          <button id="btn-delete-inbox" class="btn danger">忽略/删除</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel tasks-panel">
+      <div class="panel-head">
+        <h2>主数据库 · 正式任务</h2>
+        <div class="task-view-toggle">
+          <button id="tab-active" class="tab active">进行中</button>
+          <button id="tab-archived" class="tab">已归档</button>
+        </div>
+      </div>
+      <div id="tasks-list" class="list"></div>
+    </section>
+  </main>
+
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div>
+          <h2>设置</h2>
+          <div class="sub">DeepSeek API 与应用启动选项</div>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-section">
+          <h3>DeepSeek API</h3>
+          <label class="field">API Key
+            <input id="s-api-key" type="password" placeholder="sk-..." autocomplete="off" />
+            <span class="hint">密钥仅保存在本机 settings.json，也可使用环境变量 DEEPSEEK_API_KEY。</span>
+          </label>
+          <label class="field">Base URL
+            <input id="s-base-url" type="text" placeholder="https://api.deepseek.com" />
+          </label>
+          <label class="field">模型
+            <input id="s-model" type="text" placeholder="deepseek-v4-flash" />
+          </label>
+        </div>
+
+        <div class="modal-section">
+          <h3>通用</h3>
+          <label class="check"><input id="s-auto-parse" type="checkbox" /> 记录后自动调用 AI 解析</label>
+          <label class="check"><input id="s-autostart" type="checkbox" /> 开机自启（登录 Windows 后自动运行到托盘）</label>
+        </div>
+      </div>
+
+      <div class="modal-foot">
+        <button id="btn-close-settings" class="btn secondary">取消</button>
+        <button id="btn-save-settings" class="btn primary">保存设置</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="main.js"></script>
+</body>
+</html>

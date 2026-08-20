@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>快速记录</title>
+  <link rel="stylesheet" href="quick.css" />
+</head>
+<body>
+  <div class="quick-card">
+    <div class="hint">快速记录 · Enter 保存并隐藏 · Shift+Enter 换行 · Esc 隐藏</div>
+    <textarea id="task-input" placeholder="记下任务 / 需求 / 想法，AI 会自动整理…"></textarea>
+    <div class="actions">
+      <span id="status"></span>
+      <button id="btn-save" class="btn primary">保存 (Enter)</button>
+      <button id="btn-cancel" class="btn">隐藏 (Esc)</button>
+    </div>
+  </div>
+  <script src="quick.js"></script>
+</body>
+</html>

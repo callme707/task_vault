@@ -1,0 +1,11 @@
+/target
+/src-tauri/target
+/src-tauri/gen
+run.log
+run2.log
+app.pid
+
+# 与本项目无关的临时文件/目录
+/dsh-vision/
+/dsh-vision-0.1.0.tgz
+*.log
