@@ -1,45 +1,90 @@
+/* ============================================================
+   快速录入 · Raycast 风格深色悬浮卡片
+   ============================================================ */
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: transparent; }
+
 body {
-  font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(15, 23, 42, 0.18);
 }
+
 .quick-card {
-  width: calc(100vw - 24px);
-  height: calc(100vh - 24px);
-  background: #fff;
-  border: 1px solid #d8dee9;
-  border-radius: 14px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
-  padding: 14px;
+  width: 100vw;
+  height: 100vh;
+  background: linear-gradient(180deg, #171923, #12141c);
+  border-top: 2px solid #5b54e8;
+  padding: 16px 18px 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  color: #e8eaf3;
 }
-.hint { color: #8a919f; font-size: 12px; }
+
+.hint {
+  color: #8b91a9;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+kbd {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 5px;
+  border: 1px solid #3a3f52;
+  border-bottom-width: 2px;
+  background: #232633;
+  color: #c9cde0;
+  font-size: 11px;
+  font-family: inherit;
+  line-height: 17px;
+}
+
 textarea {
   flex: 1;
   resize: none;
-  border: 1px solid #e4e7ec;
+  border: 1px solid #323748;
   border-radius: 10px;
-  padding: 12px;
+  padding: 12px 14px;
   font-size: 15px;
   line-height: 1.6;
   outline: none;
   font-family: inherit;
+  background: #1c1f2a;
+  color: #e8eaf3;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+textarea::placeholder { color: #676e8c; }
+textarea:focus {
+  border-color: #5b54e8;
+  box-shadow: 0 0 0 3px rgba(91, 84, 232, 0.22);
+}
+
 .actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
-#status { color: #8a919f; font-size: 12px; margin-right: auto; }
+#status { color: #8b91a9; font-size: 12px; margin-right: auto; }
+
 .btn {
-  border: 1px solid #e4e7ec;
-  background: #fff;
+  border: 1px solid #323748;
+  background: #232633;
+  color: #c9cde0;
   border-radius: 8px;
   padding: 8px 16px;
   cursor: pointer;
   font-size: 13px;
+  font-family: inherit;
+  transition: all 0.15s ease;
 }
-.btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+.btn:hover { border-color: #4a5069; color: #fff; }
+.btn.primary {
+  background: linear-gradient(135deg, #5b54e8, #7c3aed);
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(91, 84, 232, 0.4);
+}
+.btn.primary:hover { filter: brightness(1.08); color: #fff; }

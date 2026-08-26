@@ -133,10 +133,10 @@ function renderTasks() {
     <div class="task ${overdue ? "task-overdue" : ""}" data-id="${t.id}" title="点击卡片可编辑">
       <div class="task-head">
         <div class="title">${esc(t.title)}</div>
-        <span class="badge">${esc(taskStatusText[t.status] || t.status)}</span>
+        <span class="badge st-${t.status}">${esc(taskStatusText[t.status] || t.status)}</span>
       </div>
       <div class="row">
-        <span>优先级 ${esc(t.priority)}</span>
+        <span>优先级 <b class="prio p-${esc(t.priority)}">${esc(t.priority)}</b></span>
         ${t.due_at ? `<span class="${overdue ? "overdue" : ""}">截止 ${esc(t.due_at.slice(0, 10))}${overdue ? " · 已过期" : ""}</span>` : ""}
         ${t.estimate_minutes ? `<span>预估 ${t.estimate_minutes} 分钟</span>` : ""}
         ${t.actual_minutes ? `<span>实际 ${t.actual_minutes} 分钟</span>` : ""}
