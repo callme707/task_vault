@@ -57,6 +57,11 @@ cd src-tauri
 cargo tauri build                  # 需要系统安装 NSIS/WiX，目标为 Windows
 ```
 
+## 分支工作流
+- `dev`：开发主线，所有功能在此汇合
+- `feature/*`：从 `dev` 拉出，一个功能一个分支，完成后合回 `dev`
+- `main`：稳定发布分支，`dev` → `main` 的合并需人工审批后执行
+
 ## 后续计划
 - 设置页开放快捷键自定义
 - AI 批量整理/合并相似临时记录（不修改原文）
