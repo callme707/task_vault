@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
-pub struct InboxItem {
-    pub id: i64,
+pub struct InboxItem {    pub id: i64,
     pub raw_text: String,
     pub source: String,
     pub created_at: String,
@@ -42,6 +41,16 @@ pub struct AiParsed {
     pub summary: String,
 }
 
+/// 任务下的子任务清单。转正时来自 AI 解析结果，之后可增删、勾选完成。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Subtask {
+    pub id: i64,
+    pub task_id: i64,
+    pub text: String,
+    pub is_done: bool,
+    pub position: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     pub id: i64,
@@ -65,6 +74,9 @@ pub struct Task {
     pub deleted_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// 随任务列表一并带出的子任务；update_task 不处理该字段，走专门的子任务命令。
+    #[serde(default)]
+    pub subtasks: Vec<Subtask>,
 }
 
 /// 主窗口提交的“转正”草稿。用户可直接使用 AI 草稿，也可在界面上修改后提交。
@@ -80,4 +92,7 @@ pub struct TaskDraft {
     pub planned_start: Option<String>,
     pub planned_end: Option<String>,
     pub tags: Vec<String>,
+    /// 转正时一并创建的子任务（来自 AI 解析，一行一条）。
+    #[serde(default)]
+    pub subtasks: Vec<String>,
 }

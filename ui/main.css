@@ -356,3 +356,73 @@ textarea { min-height: 68px; resize: vertical; }
   background: #fef2f2;
   opacity: 1;
 }
+
+/* ===== 任务列表增强：筛选 / 过期 / 进度 ===== */
+.task-filter { display: flex; gap: 8px; padding: 8px 8px 0; }
+.task-filter input { flex: 1; }
+.task-filter .btn { flex-shrink: 0; white-space: nowrap; }
+
+.task-overdue { border-color: #fecaca; background: #fffafa; }
+.overdue { color: var(--danger); font-weight: 600; }
+
+.progress {
+  height: 5px;
+  background: #eef1f5;
+  border-radius: 999px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+/* ===== 任务编辑弹窗：表单与子任务 ===== */
+.modal-body .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.modal-body label.full { margin-top: 10px; }
+.modal-body input[type="number"],
+.modal-body input[type="datetime-local"],
+.modal-body textarea {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  background: #fff;
+}
+.modal-body input:focus,
+.modal-body textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.subtask-list { display: flex; flex-direction: column; gap: 6px; }
+.subtask {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: #fff;
+}
+.subtask-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  min-width: 0;
+}
+.subtask-text { overflow-wrap: anywhere; }
+.subtask.is-done .subtask-text { text-decoration: line-through; color: var(--muted); }
+.subtask-empty { color: var(--muted); font-size: 12px; padding: 4px 0; }
+.subtask-add { display: flex; gap: 8px; margin-top: 10px; }
+.subtask-add input { flex: 1; }

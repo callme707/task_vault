@@ -2,7 +2,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::deepseek::{self, AiError};
-use crate::models::{InboxItem, Task, TaskDraft};
+use crate::models::{InboxItem, Subtask, Task, TaskDraft};
 use crate::settings::Settings;
 use crate::AppState;
 
@@ -181,10 +181,55 @@ pub fn promote_inbox(
 }
 
 #[tauri::command]
+pub fn create_task(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    draft: TaskDraft,
+) -> Result<Task, String> {
+    if draft.title.trim().is_empty() {
+        return Err("任务标题不能为空".to_string());
+    }
+    let task = state.db.create_task(&draft, None, None)?;
+    let _ = app.emit("tasks-updated", ());
+    Ok(task)
+}
+
+#[tauri::command]
 pub fn update_task(app: AppHandle, state: State<'_, AppState>, task: Task) -> Result<Task, String> {
     let updated = state.db.update_task(&task)?;
     let _ = app.emit("tasks-updated", ());
     Ok(updated)
+}
+
+#[tauri::command]
+pub fn add_subtask(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    task_id: i64,
+    text: String,
+) -> Result<Subtask, String> {
+    let st = state.db.add_subtask(task_id, &text)?;
+    let _ = app.emit("tasks-updated", ());
+    Ok(st)
+}
+
+#[tauri::command]
+pub fn set_subtask_done(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: i64,
+    is_done: bool,
+) -> Result<Subtask, String> {
+    let st = state.db.set_subtask_done(id, is_done)?;
+    let _ = app.emit("tasks-updated", ());
+    Ok(st)
+}
+
+#[tauri::command]
+pub fn delete_subtask(app: AppHandle, state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    state.db.delete_subtask(id)?;
+    let _ = app.emit("tasks-updated", ());
+    Ok(())
 }
 
 #[tauri::command]

@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use chrono::Local;
-use rusqlite::{params, Connection};
+use rusqlite::{params, params_from_iter, Connection};
 
-use crate::models::{InboxItem, Task, TaskDraft};
+use crate::models::{InboxItem, Subtask, Task, TaskDraft};
 
 const INBOX_SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS inbox (
@@ -50,6 +51,19 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_at);
 "#;
 
+const SUBTASK_SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS subtasks (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id    INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    text       TEXT NOT NULL,
+    is_done    INTEGER NOT NULL DEFAULT 0,
+    position   INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_subtasks_task ON subtasks(task_id, position);
+"#;
+
 #[derive(Clone)]
 pub struct Db {
     inbox: Arc<Mutex<Connection>>,
@@ -75,6 +89,9 @@ impl Db {
             .map_err(|e| e.to_string())?;
         tasks
             .execute_batch(TASK_SCHEMA)
+            .map_err(|e| e.to_string())?;
+        tasks
+            .execute_batch(SUBTASK_SCHEMA)
             .map_err(|e| e.to_string())?;
         ensure_column(&tasks, "tasks", "is_archived", "INTEGER NOT NULL DEFAULT 0")?;
         ensure_column(&tasks, "tasks", "deleted_at", "TEXT")?;
@@ -242,6 +259,7 @@ impl Db {
         )
         .map_err(|e| e.to_string())?;
         let id = conn.last_insert_rowid();
+        insert_subtasks(&conn, id, &draft.subtasks)?;
         drop(conn);
         self.get_task(id)
     }
@@ -251,15 +269,132 @@ impl Db {
             .tasks
             .lock()
             .map_err(|_| "tasks db lock poisoned".to_string())?;
-        task_by_id(&conn, id).map_err(|e| e.to_string())
+        let mut task = task_by_id(&conn, id).map_err(|e| e.to_string())?;
+        drop(conn);
+        let mut map = self.subtasks_for_tasks(&[task.id])?;
+        task.subtasks = map.remove(&task.id).unwrap_or_default();
+        Ok(task)
     }
 
     pub fn list_tasks(&self) -> Result<Vec<Task>, String> {
-        self.query_tasks("deleted_at IS NULL AND is_archived = 0")
+        let mut tasks = self.query_tasks("deleted_at IS NULL AND is_archived = 0")?;
+        self.attach_subtasks(&mut tasks)?;
+        Ok(tasks)
     }
 
     pub fn list_archived_tasks(&self) -> Result<Vec<Task>, String> {
-        self.query_tasks("deleted_at IS NULL AND is_archived = 1")
+        let mut tasks = self.query_tasks("deleted_at IS NULL AND is_archived = 1")?;
+        self.attach_subtasks(&mut tasks)?;
+        Ok(tasks)
+    }
+
+    fn attach_subtasks(&self, tasks: &mut [Task]) -> Result<(), String> {
+        let ids: Vec<i64> = tasks.iter().map(|t| t.id).collect();
+        let map = self.subtasks_for_tasks(&ids)?;
+        for t in tasks.iter_mut() {
+            t.subtasks = map.get(&t.id).cloned().unwrap_or_default();
+        }
+        Ok(())
+    }
+
+    /// 一次查询取出多个任务的子任务，避免列表页 N+1。
+    pub fn subtasks_for_tasks(
+        &self,
+        task_ids: &[i64],
+    ) -> Result<HashMap<i64, Vec<Subtask>>, String> {
+        let mut out: HashMap<i64, Vec<Subtask>> = HashMap::new();
+        if task_ids.is_empty() {
+            return Ok(out);
+        }
+        let conn = self
+            .tasks
+            .lock()
+            .map_err(|_| "tasks db lock poisoned".to_string())?;
+        let placeholders = task_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "SELECT id, task_id, text, is_done, position FROM subtasks
+             WHERE task_id IN ({placeholders}) ORDER BY position, id"
+        );
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params_from_iter(task_ids.iter()), subtask_from_row)
+            .map_err(|e| e.to_string())?;
+        for r in rows {
+            let st = r.map_err(|e| e.to_string())?;
+            out.entry(st.task_id).or_default().push(st);
+        }
+        Ok(out)
+    }
+
+    pub fn get_subtask(&self, id: i64) -> Result<Subtask, String> {
+        let conn = self
+            .tasks
+            .lock()
+            .map_err(|_| "tasks db lock poisoned".to_string())?;
+        conn.query_row(
+            "SELECT id, task_id, text, is_done, position FROM subtasks WHERE id = ?1",
+            params![id],
+            subtask_from_row,
+        )
+        .map_err(|e| e.to_string())
+    }
+
+    pub fn add_subtask(&self, task_id: i64, text: &str) -> Result<Subtask, String> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Err("子任务内容不能为空".to_string());
+        }
+        let conn = self
+            .tasks
+            .lock()
+            .map_err(|_| "tasks db lock poisoned".to_string())?;
+        let position: i64 = conn
+            .query_row(
+                "SELECT COALESCE(MAX(position), -1) + 1 FROM subtasks WHERE task_id = ?1",
+                params![task_id],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO subtasks(task_id, text, position, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params![task_id, text, position, Local::now().to_rfc3339()],
+        )
+        .map_err(|e| e.to_string())?;
+        let id = conn.last_insert_rowid();
+        drop(conn);
+        self.get_subtask(id)
+    }
+
+    pub fn set_subtask_done(&self, id: i64, done: bool) -> Result<Subtask, String> {
+        let conn = self
+            .tasks
+            .lock()
+            .map_err(|_| "tasks db lock poisoned".to_string())?;
+        let n = conn
+            .execute(
+                "UPDATE subtasks SET is_done = ?2 WHERE id = ?1",
+                params![id, if done { 1 } else { 0 }],
+            )
+            .map_err(|e| e.to_string())?;
+        if n == 0 {
+            return Err("子任务不存在".to_string());
+        }
+        drop(conn);
+        self.get_subtask(id)
+    }
+
+    pub fn delete_subtask(&self, id: i64) -> Result<(), String> {
+        let conn = self
+            .tasks
+            .lock()
+            .map_err(|_| "tasks db lock poisoned".to_string())?;
+        let n = conn
+            .execute("DELETE FROM subtasks WHERE id = ?1", params![id])
+            .map_err(|e| e.to_string())?;
+        if n == 0 {
+            return Err("子任务不存在".to_string());
+        }
+        Ok(())
     }
 
     fn query_tasks(&self, filter: &str) -> Result<Vec<Task>, String> {
@@ -406,6 +541,31 @@ fn task_by_id(conn: &Connection, id: i64) -> rusqlite::Result<Task> {
     )
 }
 
+fn insert_subtasks(conn: &Connection, task_id: i64, texts: &[String]) -> Result<(), String> {
+    for (i, text) in texts.iter().enumerate() {
+        let t = text.trim();
+        if t.is_empty() {
+            continue;
+        }
+        conn.execute(
+            "INSERT INTO subtasks(task_id, text, position, created_at) VALUES (?1, ?2, ?3, ?4)",
+            params![task_id, t, i as i64, Local::now().to_rfc3339()],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn subtask_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Subtask> {
+    Ok(Subtask {
+        id: row.get(0)?,
+        task_id: row.get(1)?,
+        text: row.get(2)?,
+        is_done: row.get::<_, i64>(3)? != 0,
+        position: row.get(4)?,
+    })
+}
+
 fn task_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
     let tags_raw: String = row.get(12)?;
     let tags = serde_json::from_str(&tags_raw).unwrap_or_default();
@@ -429,6 +589,7 @@ fn task_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Task> {
         deleted_at: row.get(16)?,
         created_at: row.get(17)?,
         updated_at: row.get(18)?,
+        subtasks: Vec::new(),
     })
 }
 
@@ -490,16 +651,31 @@ mod tests {
             planned_start: None,
             planned_end: None,
             tags: vec!["Rust".into()],
+            subtasks: vec!["确认筛选字段".into(), "修改导出接口".into()],
         };
         let task = db
             .create_task(&draft, Some(item.id), Some(&item.raw_text))
             .unwrap();
         assert_eq!(task.source_inbox_id, Some(item.id));
+        assert_eq!(task.subtasks.len(), 2);
 
         db.mark_promoted(item.id).unwrap();
         assert!(db.get_inbox(item.id).unwrap().is_promoted);
         assert_eq!(db.list_tasks().unwrap().len(), 1);
         assert_eq!(db.list_inbox(false).unwrap().len(), 1);
+
+        // 子任务：转正带入 → 勾选 / 追加 / 删除
+        let done = db.set_subtask_done(task.subtasks[0].id, true).unwrap();
+        assert!(done.is_done);
+        let added = db.add_subtask(task.id, " 前端联调 ").unwrap();
+        assert_eq!(added.text, "前端联调");
+        assert_eq!(added.position, 2);
+        assert!(db.add_subtask(task.id, "   ").is_err());
+        db.delete_subtask(added.id).unwrap();
+        let listed = db.list_tasks().unwrap();
+        assert_eq!(listed[0].subtasks.len(), 2);
+        assert!(listed[0].subtasks[0].is_done);
+        assert!(!listed[0].subtasks[1].is_done);
 
         // 优先级调整
         let updated = db.set_task_priority(task.id, "P0").unwrap();
