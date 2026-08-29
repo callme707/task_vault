@@ -98,16 +98,36 @@
 
       <div class="modal-body">
         <div class="modal-section">
-          <h3>DeepSeek API</h3>
+          <h3>AI 服务</h3>
+          <label class="field">接口协议
+            <select id="s-provider">
+              <option value="openai">OpenAI 兼容（DeepSeek / Kimi / Qwen / GLM / Ollama…）</option>
+              <option value="anthropic">Anthropic（Claude 官方 API）</option>
+            </select>
+          </label>
           <label class="field">API Key
-            <input id="s-api-key" type="password" placeholder="sk-..." autocomplete="off" />
-            <span class="hint">密钥仅保存在本机 settings.json，也可使用环境变量 DEEPSEEK_API_KEY。</span>
+            <input id="s-api-key" type="password" placeholder="sk-... / sk-ant-..." autocomplete="off" />
+            <span class="hint">密钥仅保存在本机 settings.json；留空时读取环境变量（OpenAI 协议：DEEPSEEK_API_KEY / OPENAI_API_KEY，Anthropic：ANTHROPIC_API_KEY）。</span>
           </label>
-          <label class="field">Base URL
-            <input id="s-base-url" type="text" placeholder="https://api.deepseek.com" />
-          </label>
+          <div class="field">
+            <span>Base URL</span>
+            <div class="preset-row">
+              <input id="s-base-url" type="text" placeholder="https://api.deepseek.com" />
+              <select id="s-preset">
+                <option value="">常用预设…</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="openai">OpenAI</option>
+                <option value="moonshot">Kimi</option>
+                <option value="qwen">Qwen</option>
+                <option value="glm">GLM</option>
+                <option value="ollama">Ollama 本地</option>
+                <option value="anthropic">Anthropic</option>
+              </select>
+            </div>
+          </div>
           <label class="field">模型
-            <input id="s-model" type="text" placeholder="deepseek-v4-flash" />
+            <input id="s-model" type="text" placeholder="deepseek-v4-flash / claude-sonnet-4-5" />
+            <span class="hint">需与服务商匹配，例如 DeepSeek 填 deepseek-v4-flash，Anthropic 填 claude-sonnet-4-5。</span>
           </label>
         </div>
 
