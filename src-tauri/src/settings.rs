@@ -3,6 +3,11 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+/// AI 提供商协议。OpenAI 兼容协议（DeepSeek/Kimi/Qwen/GLM/本地 Ollama 等）
+/// 走 openai；Anthropic 官方 API 走 anthropic。
+pub const PROVIDER_OPENAI: &str = "openai";
+pub const PROVIDER_ANTHROPIC: &str = "anthropic";
+
 pub const DEFAULT_MODEL: &str = "deepseek-v4-flash";
 pub const DEFAULT_BASE_URL: &str = "https://api.deepseek.com";
 pub const DEFAULT_QUICK_HOTKEY: &str = "Ctrl+Alt+Q";
@@ -13,10 +18,17 @@ pub struct Settings {
     pub api_key: String,
     pub base_url: String,
     pub model: String,
+    /// openai / anthropic
+    #[serde(default = "default_provider")]
+    pub provider: String,
     pub auto_parse: bool,
     pub autostart: bool,
     pub quick_hotkey: String,
     pub main_hotkey: String,
+}
+
+fn default_provider() -> String {
+    PROVIDER_OPENAI.to_string()
 }
 
 impl Default for Settings {
@@ -25,6 +37,7 @@ impl Default for Settings {
             api_key: String::new(),
             base_url: DEFAULT_BASE_URL.to_string(),
             model: DEFAULT_MODEL.to_string(),
+            provider: PROVIDER_OPENAI.to_string(),
             auto_parse: true,
             autostart: false,
             quick_hotkey: DEFAULT_QUICK_HOTKEY.to_string(),
@@ -34,6 +47,27 @@ impl Default for Settings {
 }
 
 impl Settings {
+    pub fn provider(&self) -> &str {
+        if self.provider == PROVIDER_ANTHROPIC {
+            PROVIDER_ANTHROPIC
+        } else {
+            PROVIDER_OPENAI
+        }
+    }
+
+    /// Anthropic 协议的接口地址不带 /v1（SDK 路径为 /v1/messages），
+    /// 用户填官方地址 https://api.anthropic.com 即可；OpenAI 兼容地址保持原样。
+    pub fn normalized_base_url(&self) -> String {
+        let mut url = self.base_url.trim().trim_end_matches('/').to_string();
+        if url.is_empty() {
+            url = DEFAULT_BASE_URL.to_string();
+        }
+        if self.provider() == PROVIDER_ANTHROPIC && url.ends_with("/v1") {
+            url.truncate(url.len() - 3);
+        }
+        url
+    }
+
     pub fn load_or_create(path: &Path) -> Result<Self, String> {
         if path.exists() {
             let text = fs::read_to_string(path).map_err(|e| e.to_string())?;
@@ -57,13 +91,49 @@ impl Settings {
         fs::write(path, text).map_err(|e| e.to_string())
     }
 
-    /// API Key 优先取配置，配置为空时允许使用环境变量 DEEPSEEK_API_KEY。
+    /// API Key 优先取配置，配置为空时允许使用环境变量。
+    /// openai 协议读 DEEPSEEK_API_KEY 或 OPENAI_API_KEY；anthropic 读 ANTHROPIC_API_KEY。
     pub fn effective_api_key(&self) -> Option<String> {
-        if !self.api_key.trim().is_empty() {
-            return Some(self.api_key.trim().to_string());
+        let trimmed = self.api_key.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
         }
-        std::env::var("DEEPSEEK_API_KEY")
-            .ok()
-            .filter(|s| !s.trim().is_empty())
+        let env_names: &[&str] = match self.provider() {
+            PROVIDER_ANTHROPIC => &["ANTHROPIC_API_KEY"],
+            _ => &["DEEPSEEK_API_KEY", "OPENAI_API_KEY"],
+        };
+        env_names
+            .iter()
+            .find_map(|n| std::env::var(n).ok())
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_defaults_and_normalization() {
+        let mut s = Settings::default();
+        assert_eq!(s.provider(), PROVIDER_OPENAI);
+
+        // anthropic + 官方地址：去掉尾部 /v1，避免 /v1/v1
+        s.provider = PROVIDER_ANTHROPIC.into();
+        s.base_url = "https://api.anthropic.com/v1".into();
+        assert_eq!(s.normalized_base_url(), "https://api.anthropic.com");
+
+        // openai 兼容地址保持原样（多数网关以 /v1 结尾）
+        s.provider = PROVIDER_OPENAI.into();
+        s.base_url = "https://api.deepseek.com/v1".into();
+        assert_eq!(s.normalized_base_url(), "https://api.deepseek.com/v1");
+
+        // 旧配置文件没有 provider 字段时 serde 回退到 openai
+        let legacy = serde_json::from_str::<Settings>(
+            r#"{"api_key":"","base_url":"https://api.deepseek.com","model":"deepseek-v4-flash","auto_parse":true,"autostart":false,"quick_hotkey":"Ctrl+Alt+Q","main_hotkey":"Ctrl+Alt+W"}"#,
+        )
+        .unwrap();
+        assert_eq!(legacy.provider(), PROVIDER_OPENAI);
     }
 }

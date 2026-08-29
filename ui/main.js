@@ -475,8 +475,20 @@ async function refreshAll() {
 
 let currentSettings = null;
 
+// 常用服务商预设：切换时自动填协议/地址/模型，用户可再手改覆盖。
+const PRESETS = {
+  deepseek:   { provider: "openai",    base_url: "https://api.deepseek.com",             model: "deepseek-v4-flash" },
+  openai:     { provider: "openai",    base_url: "https://api.openai.com/v1",            model: "gpt-4o-mini" },
+  moonshot:   { provider: "openai",    base_url: "https://api.moonshot.cn/v1",           model: "kimi-latest" },
+  qwen:       { provider: "openai",    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" },
+  glm:        { provider: "openai",    base_url: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash" },
+  ollama:     { provider: "openai",    base_url: "http://localhost:11434/v1",            model: "qwen3:8b" },
+  anthropic:  { provider: "anthropic", base_url: "https://api.anthropic.com",            model: "claude-sonnet-4-5" },
+};
+
 async function loadSettings() {
   currentSettings = await invoke("get_settings");
+  document.getElementById("s-provider").value = currentSettings.provider || "openai";
   document.getElementById("s-api-key").value = currentSettings.api_key || "";
   document.getElementById("s-base-url").value = currentSettings.base_url;
   document.getElementById("s-model").value = currentSettings.model;
@@ -487,7 +499,8 @@ async function loadSettings() {
 async function saveSettings() {
   const s = {
     api_key: document.getElementById("s-api-key").value.trim(),
-    base_url: document.getElementById("s-base-url").value.trim(),
+    provider: document.getElementById("s-provider").value,
+    base_url: document.getElementById("s-base-url").value.trim() || "https://api.deepseek.com",
     model: document.getElementById("s-model").value.trim() || "deepseek-v4-flash",
     auto_parse: document.getElementById("s-auto-parse").checked,
     autostart: document.getElementById("s-autostart").checked,
@@ -517,6 +530,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("btn-settings").onclick = async () => {
     await loadSettings();
     document.getElementById("settings-modal").classList.remove("hidden");
+  };
+  document.getElementById("s-preset").onchange = (e) => {
+    const p = PRESETS[e.target.value];
+    if (!p) return;
+    document.getElementById("s-provider").value = p.provider;
+    document.getElementById("s-base-url").value = p.base_url;
+    document.getElementById("s-model").value = p.model;
   };
   document.getElementById("btn-close-settings").onclick = () =>
     document.getElementById("settings-modal").classList.add("hidden");

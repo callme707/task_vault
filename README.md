@@ -10,7 +10,7 @@ Windows 桌面工具：全局快捷键快速记录 → 临时数据库（inbox.d
 - 托盘图标：打开主窗口、快速记录、退出
 - 双 SQLite 数据库：`inbox.db` / `tasks.db`（WAL 模式）
 - 快速窗口录入后写入临时库，原始记录只读保留
-- 后台自动调用 DeepSeek 官方 API（默认 `deepseek-v4-flash`）做 JSON 结构化整理
+- 后台自动调用 AI（默认 DeepSeek）做 JSON 结构化整理，支持 OpenAI 兼容协议（DeepSeek/Kimi/Qwen/GLM/Ollama 等）与 Anthropic 协议，设置中可切换并内置常用服务商预设
 - 主窗口：临时库列表 / 原始记录 + AI 解析结果 / 转正草稿 / 主库任务列表
 - 临时记录转正式任务（保留来源与原始快照，AI 解析的子任务一并带入）
 - 主库任务操作：手动调整优先级、归档/恢复归档、删除（软删除）
@@ -42,7 +42,7 @@ cargo run
 - `tasks.db`：主库
 - `settings.json`：配置（API Key、模型等）
 
-在主窗口右上角“设置”中填入 DeepSeek API Key；也可以设置环境变量 `DEEPSEEK_API_KEY`。
+在主窗口右上角“设置”中选择接口协议与服务商（或自定义 Base URL / 模型），并填入对应 API Key；也可以使用环境变量（`DEEPSEEK_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`）。
 
 ## 快捷键使用
 1. 按 `Ctrl+Alt+Q` 呼出快速记录窗；
