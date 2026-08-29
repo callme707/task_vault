@@ -28,14 +28,10 @@ pub async fn capture_inbox(
             let handle = app.clone();
             let db = state.db.clone();
             let http = state.http.clone();
-            let model = settings.model.clone();
-            let base_url = settings.base_url.clone();
-            let api_key = settings
-                .effective_api_key()
-                .ok_or_else(|| "no key".to_string())?;
+            let task_settings = settings.clone();
             tauri::async_runtime::spawn(async move {
                 let _ =
-                    parse_inbox_with_retry(&db, &http, &base_url, &model, &api_key, item.id).await;
+                    parse_inbox_with_retry(&db, &http, &task_settings, item.id).await;
                 let _ = handle.emit("inbox-updated", item.id);
             });
         } else {
@@ -66,18 +62,17 @@ pub fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
 pub fn parse_inbox_item(app: AppHandle, state: State<'_, AppState>, id: i64) -> Result<(), String> {
     let item = state.db.get_inbox(id)?;
     let settings = state.settings.read().map_err(|e| e.to_string())?.clone();
-    let Some(api_key) = settings.effective_api_key() else {
+    let Some(_api_key) = settings.effective_api_key() else {
         state.db.set_ai_result(id, "unconfigured", None, None)?;
         let _ = app.emit("inbox-updated", id);
-        return Err("未配置 DeepSeek API Key，请先在设置中填写".to_string());
+        return Err("未配置 API Key，请先在设置中填写".to_string());
     };
 
     let db = state.db.clone();
     let http = state.http.clone();
-    let model = settings.model.clone();
-    let base_url = settings.base_url.clone();
+    let task_settings = settings.clone();
     tauri::async_runtime::spawn(async move {
-        let _ = parse_inbox_with_retry(&db, &http, &base_url, &model, &api_key, item.id).await;
+        let _ = parse_inbox_with_retry(&db, &http, &task_settings, item.id).await;
         let _ = app.emit("inbox-updated", item.id);
     });
     Ok(())
@@ -92,19 +87,17 @@ pub fn process_pending_inbox(app: AppHandle, state: State<'_, AppState>) -> Resu
 
     let settings = state.settings.read().map_err(|e| e.to_string())?.clone();
     if settings.effective_api_key().is_none() {
-        return Err("未配置 DeepSeek API Key，请先在设置中填写".to_string());
+        return Err("未配置 API Key，请先在设置中填写".to_string());
     }
 
     for id in &ids {
         let db = state.db.clone();
         let http = state.http.clone();
-        let model = settings.model.clone();
-        let base_url = settings.base_url.clone();
-        let api_key = settings.effective_api_key().unwrap_or_default();
+        let task_settings = settings.clone();
         let handle = app.clone();
         let item_id = *id;
         tauri::async_runtime::spawn(async move {
-            let _ = parse_inbox_with_retry(&db, &http, &base_url, &model, &api_key, item_id).await;
+            let _ = parse_inbox_with_retry(&db, &http, &task_settings, item_id).await;
             let _ = handle.emit("inbox-updated", item_id);
         });
     }
@@ -114,31 +107,22 @@ pub fn process_pending_inbox(app: AppHandle, state: State<'_, AppState>) -> Resu
 async fn parse_inbox_with_retry(
     db: &crate::db::Db,
     http: &reqwest::Client,
-    base_url: &str,
-    model: &str,
-    api_key: &str,
+    settings: &Settings,
     id: i64,
 ) -> Result<(), AiError> {
     let raw = match db.get_inbox(id) {
         Ok(item) => item.raw_text,
         Err(_) => return Err(AiError::Api("记录不存在".to_string())),
     };
-    let settings = Settings {
-        api_key: api_key.to_string(),
-        base_url: base_url.to_string(),
-        model: model.to_string(),
-        auto_parse: true,
-        ..Default::default()
-    };
 
     db.set_ai_processing(id).ok();
 
     let mut last_err = AiError::Api("unknown".to_string());
     for attempt in 0..3 {
-        match deepseek::parse_inbox_text(http, &settings, &raw).await {
+        match deepseek::parse_inbox_text(http, settings, &raw).await {
             Ok(parsed) => {
                 let json = serde_json::to_string(&parsed).unwrap_or_else(|_| "{}".to_string());
-                let _ = db.set_ai_result(id, "done", Some(&json), Some(model));
+                let _ = db.set_ai_result(id, "done", Some(&json), Some(&settings.model));
                 return Ok(());
             }
             Err(e) => {
@@ -151,7 +135,7 @@ async fn parse_inbox_with_retry(
     }
 
     let msg = last_err.to_string();
-    let _ = db.set_ai_result(id, "failed", Some(&msg), Some(model));
+    let _ = db.set_ai_result(id, "failed", Some(&msg), Some(&settings.model));
     Err(last_err)
 }
 
@@ -300,9 +284,13 @@ pub fn save_settings(
     crate::register_hotkeys(&app, &settings);
 
     if settings.autostart {
-        app.autolaunch().enable().map_err(|e| e.to_string())?;
-    } else {
-        app.autolaunch().disable().map_err(|e| e.to_string())?;
+        app.autolaunch()
+            .enable()
+            // 走到这里时设置已落盘，报错也要说明“保存成功，只是自启没开起来”
+            .map_err(|e| format!("设置已保存，但启用开机自启失败：{e}"))?;
+    } else if let Err(e) = app.autolaunch().disable() {
+        // Windows 下自启项本就不存在时 disable 会报 os error 2，此时已是关闭状态，不算失败
+        tracing::warn!("关闭开机自启失败（可能本就未启用）: {e}");
     }
     Ok(settings)
 }
