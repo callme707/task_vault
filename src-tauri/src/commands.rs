@@ -284,9 +284,13 @@ pub fn save_settings(
     crate::register_hotkeys(&app, &settings);
 
     if settings.autostart {
-        app.autolaunch().enable().map_err(|e| e.to_string())?;
-    } else {
-        app.autolaunch().disable().map_err(|e| e.to_string())?;
+        app.autolaunch()
+            .enable()
+            // 走到这里时设置已落盘，报错也要说明“保存成功，只是自启没开起来”
+            .map_err(|e| format!("设置已保存，但启用开机自启失败：{e}"))?;
+    } else if let Err(e) = app.autolaunch().disable() {
+        // Windows 下自启项本就不存在时 disable 会报 os error 2，此时已是关闭状态，不算失败
+        tracing::warn!("关闭开机自启失败（可能本就未启用）: {e}");
     }
     Ok(settings)
 }
