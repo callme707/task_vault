@@ -510,11 +510,12 @@ async function saveSettings() {
   };
   try {
     await invoke("save_settings", { settings: s });
-    document.getElementById("settings-modal").classList.add("hidden");
     showToast("设置已保存");
   } catch (e) {
-    alert(`保存失败：${e}`);
+    // 后端报错时设置通常已写入（如自启开关操作失败），文案自带说明
+    alert(String(e));
   }
+  document.getElementById("settings-modal").classList.add("hidden");
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
