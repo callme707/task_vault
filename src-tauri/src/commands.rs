@@ -1,10 +1,129 @@
+use std::path::Path;
+
+use base64::engine::general_purpose::STANDARD as B64;
+use base64::Engine as _;
+use chrono::Local;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
-use crate::deepseek::{self, AiError};
+use crate::deepseek::{self, encode_image, AiError};
 use crate::models::{InboxItem, Subtask, Task, TaskDraft};
 use crate::settings::Settings;
 use crate::AppState;
+
+/// 附件目录：app_data/attachments
+fn attachments_dir(state: &State<'_, AppState>) -> std::path::PathBuf {
+    state
+        .settings_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("attachments")
+}
+
+/// 录入后的 AI 解析调度：按设置决定自动解析 / 未配置 / 跳过，异步执行不阻塞录入。
+fn trigger_parse(app: &AppHandle, state: &State<'_, AppState>, id: i64) {
+    let settings = match state.settings.read() {
+        Ok(s) => s.clone(),
+        Err(_) => return,
+    };
+    if settings.auto_parse {
+        if settings.effective_api_key().is_some() {
+            let handle = app.clone();
+            let db = state.db.clone();
+            let http = state.http.clone();
+            let attachments_dir = attachments_dir(state);
+            tauri::async_runtime::spawn(async move {
+                let _ = parse_inbox_with_retry(&db, &http, &settings, &attachments_dir, id).await;
+                let _ = handle.emit("inbox-updated", id);
+            });
+        } else {
+            let _ = state.db.set_ai_result(id, "unconfigured", None, None);
+            let _ = app.emit("inbox-updated", id);
+        }
+    } else {
+        let _ = state.db.set_ai_result(id, "skipped", None, None);
+        let _ = app.emit("inbox-updated", id);
+    }
+}
+
+fn save_attachment(
+    dir: &Path,
+    bytes: &[u8],
+) -> Result<String, String> {
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let ext = match deepseek::sniff_image_mime(bytes) {
+        Some("image/png") => "png",
+        Some("image/jpeg") => "jpg",
+        Some("image/webp") => "webp",
+        Some("image/gif") => "gif",
+        _ => return Err("不支持的图片格式（仅支持 PNG/JPEG/WebP/GIF）".to_string()),
+    };
+    let name = format!("img_{}.{}", Local::now().format("%Y%m%d_%H%M%S%3f"), ext);
+    std::fs::write(dir.join(&name), bytes).map_err(|e| e.to_string())?;
+    Ok(name)
+}
+
+/// 剥离 data URL 前缀，返回纯 base64
+fn strip_data_url(data: &str) -> Result<&str, String> {
+    match data.find(";base64,") {
+        Some(i) => Ok(&data[i + 8..]),
+        None => {
+            if data.contains("base64") || data.starts_with('/') || data.starts_with('i') {
+                Ok(data)
+            } else {
+                Err("图片数据格式不正确".to_string())
+            }
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn capture_inbox_image(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    text: Option<String>,
+    image_base64: String,
+) -> Result<InboxItem, String> {
+    let raw_b64 = strip_data_url(&image_base64)?;
+    let bytes = B64.decode(raw_b64.trim())
+        .map_err(|e| format!("图片解码失败: {e}"))?;
+    let name = save_attachment(&attachments_dir(&state), &bytes)?;
+
+    let raw = text.unwrap_or_default().trim().to_string();
+    let item = state.db.insert_inbox(&raw, "image", Some(&name))?;
+    trigger_parse(&app, &state, item.id);
+    Ok(state.db.get_inbox(item.id)?)
+}
+
+/// 详情页展示图片：返回 data URL（省去 asset 协议/CSP 配置）
+#[tauri::command]
+pub fn read_inbox_image(
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<Option<String>, String> {
+    let item = state.db.get_inbox(id)?;
+    let Some(rel) = item.image_path else {
+        return Ok(None);
+    };
+    let bytes = std::fs::read(attachments_dir(&state).join(rel))
+        .map_err(|e| format!("读取图片失败: {e}"))?;
+    let img = encode_image(&bytes).map_err(|e| e.to_string())?;
+    Ok(Some(format!("data:{};base64,{}", img.mime, img.data)))
+}
+
+/// 快速窗拖拽图片文件时取预览用：读取磁盘图片转 data URL（仅限图片扩展名）
+#[tauri::command]
+pub fn read_image_file_base64(path: String) -> Result<String, String> {
+    let ext_ok = ["png", "jpg", "jpeg", "webp", "gif"]
+        .iter()
+        .any(|e| path.rsplit('.').next().is_some_and(|x| x.eq_ignore_ascii_case(e)));
+    if !ext_ok {
+        return Err("仅支持 PNG/JPEG/WebP/GIF 图片".to_string());
+    }
+    let bytes = std::fs::read(&path).map_err(|e| format!("读取文件失败: {e}"))?;
+    let img = encode_image(&bytes).map_err(|e| e.to_string())?;
+    Ok(format!("data:{};base64,{}", img.mime, img.data))
+}
 
 #[tauri::command]
 pub async fn capture_inbox(
@@ -20,31 +139,8 @@ pub async fn capture_inbox(
 
     let item = state
         .db
-        .insert_inbox(raw, source.as_deref().unwrap_or("hotkey"))?;
-
-    let settings = state.settings.read().map_err(|e| e.to_string())?.clone();
-    if settings.auto_parse {
-        if settings.effective_api_key().is_some() {
-            let handle = app.clone();
-            let db = state.db.clone();
-            let http = state.http.clone();
-            let task_settings = settings.clone();
-            tauri::async_runtime::spawn(async move {
-                let _ =
-                    parse_inbox_with_retry(&db, &http, &task_settings, item.id).await;
-                let _ = handle.emit("inbox-updated", item.id);
-            });
-        } else {
-            state
-                .db
-                .set_ai_result(item.id, "unconfigured", None, None)?;
-            let _ = app.emit("inbox-updated", item.id);
-        }
-    } else {
-        state.db.set_ai_result(item.id, "skipped", None, None)?;
-        let _ = app.emit("inbox-updated", item.id);
-    }
-
+        .insert_inbox(raw, source.as_deref().unwrap_or("hotkey"), None)?;
+    trigger_parse(&app, &state, item.id);
     Ok(state.db.get_inbox(item.id)?)
 }
 
@@ -71,8 +167,9 @@ pub fn parse_inbox_item(app: AppHandle, state: State<'_, AppState>, id: i64) -> 
     let db = state.db.clone();
     let http = state.http.clone();
     let task_settings = settings.clone();
+    let attachments_dir = attachments_dir(&state);
     tauri::async_runtime::spawn(async move {
-        let _ = parse_inbox_with_retry(&db, &http, &task_settings, item.id).await;
+        let _ = parse_inbox_with_retry(&db, &http, &task_settings, &attachments_dir, item.id).await;
         let _ = app.emit("inbox-updated", item.id);
     });
     Ok(())
@@ -94,10 +191,12 @@ pub fn process_pending_inbox(app: AppHandle, state: State<'_, AppState>) -> Resu
         let db = state.db.clone();
         let http = state.http.clone();
         let task_settings = settings.clone();
+        let attachments_dir = attachments_dir(&state);
         let handle = app.clone();
         let item_id = *id;
         tauri::async_runtime::spawn(async move {
-            let _ = parse_inbox_with_retry(&db, &http, &task_settings, item_id).await;
+            let _ =
+                parse_inbox_with_retry(&db, &http, &task_settings, &attachments_dir, item_id).await;
             let _ = handle.emit("inbox-updated", item_id);
         });
     }
@@ -108,21 +207,55 @@ async fn parse_inbox_with_retry(
     db: &crate::db::Db,
     http: &reqwest::Client,
     settings: &Settings,
+    attachments_dir: &Path,
     id: i64,
 ) -> Result<(), AiError> {
-    let raw = match db.get_inbox(id) {
-        Ok(item) => item.raw_text,
+    let item = match db.get_inbox(id) {
+        Ok(item) => item,
         Err(_) => return Err(AiError::Api("记录不存在".to_string())),
+    };
+    // 带图片的记录走视觉模型；附件丢失直接失败并说明原因
+    let image = match &item.image_path {
+        Some(rel) => Some(encode_image(
+            &std::fs::read(attachments_dir.join(rel))
+                .map_err(|e| AiError::Api(format!("图片附件读取失败: {e}")))?,
+        )?),
+        None => None,
     };
 
     db.set_ai_processing(id).ok();
 
+    let model_used = settings.model_for(image.is_some()).to_string();
     let mut last_err = AiError::Api("unknown".to_string());
     for attempt in 0..3 {
-        match deepseek::parse_inbox_text(http, settings, &raw).await {
+        match deepseek::parse_inbox_text(http, settings, &item.raw_text, image.as_ref()).await {
             Ok(parsed) => {
-                let json = serde_json::to_string(&parsed).unwrap_or_else(|_| "{}".to_string());
-                let _ = db.set_ai_result(id, "done", Some(&json), Some(&settings.model));
+                // 图片解析可能一次返回多个待办：首条留在原记录，其余拆成新记录（共享同一张图）
+                let store = |a: &crate::models::AiParsed| {
+                    serde_json::to_string(&crate::models::AiParsed {
+                        items: Vec::new(),
+                        ..a.clone()
+                    })
+                    .unwrap_or_else(|_| "{}".to_string())
+                };
+                if parsed.items.is_empty() {
+                    let _ = db.set_ai_result(id, "done", Some(&store(&parsed)), Some(&model_used));
+                } else {
+                    let _ = db.set_ai_result(id, "done", Some(&store(&parsed.items[0])), Some(&model_used));
+                    for extra in parsed.items.iter().skip(1) {
+                        let raw = format!("[图片待办] {}", extra.title);
+                        if let Ok(new_item) =
+                            db.insert_inbox(&raw, "image-split", item.image_path.as_deref())
+                        {
+                            let _ = db.set_ai_result(
+                                new_item.id,
+                                "done",
+                                Some(&store(extra)),
+                                Some(&model_used),
+                            );
+                        }
+                    }
+                }
                 return Ok(());
             }
             Err(e) => {
@@ -135,7 +268,7 @@ async fn parse_inbox_with_retry(
     }
 
     let msg = last_err.to_string();
-    let _ = db.set_ai_result(id, "failed", Some(&msg), Some(&settings.model));
+    let _ = db.set_ai_result(id, "failed", Some(&msg), Some(&model_used));
     Err(last_err)
 }
 

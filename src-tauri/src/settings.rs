@@ -21,6 +21,9 @@ pub struct Settings {
     /// openai / anthropic
     #[serde(default = "default_provider")]
     pub provider: String,
+    /// 解析图片用的视觉模型；留空则用主模型（主模型需自身支持视觉）
+    #[serde(default)]
+    pub vision_model: Option<String>,
     pub auto_parse: bool,
     pub autostart: bool,
     pub quick_hotkey: String,
@@ -38,6 +41,7 @@ impl Default for Settings {
             base_url: DEFAULT_BASE_URL.to_string(),
             model: DEFAULT_MODEL.to_string(),
             provider: PROVIDER_OPENAI.to_string(),
+            vision_model: None,
             auto_parse: true,
             autostart: false,
             quick_hotkey: DEFAULT_QUICK_HOTKEY.to_string(),
@@ -52,6 +56,14 @@ impl Settings {
             PROVIDER_ANTHROPIC
         } else {
             PROVIDER_OPENAI
+        }
+    }
+
+    /// 图片解析走 vision_model（非空时），否则回落主模型
+    pub fn model_for(&self, with_image: bool) -> &str {
+        match self.vision_model.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            Some(m) if with_image => m,
+            _ => self.model.as_str(),
         }
     }
 
@@ -130,10 +142,20 @@ mod tests {
         assert_eq!(s.normalized_base_url(), "https://api.deepseek.com/v1");
 
         // 旧配置文件没有 provider 字段时 serde 回退到 openai
-        let legacy = serde_json::from_str::<Settings>(
+        let mut legacy = serde_json::from_str::<Settings>(
             r#"{"api_key":"","base_url":"https://api.deepseek.com","model":"deepseek-v4-flash","auto_parse":true,"autostart":false,"quick_hotkey":"Ctrl+Alt+Q","main_hotkey":"Ctrl+Alt+W"}"#,
         )
         .unwrap();
         assert_eq!(legacy.provider(), PROVIDER_OPENAI);
+        assert!(legacy.vision_model.is_none());
+
+        // 视觉模型：留空/空白回落主模型，配置了则图片走视觉模型
+        assert_eq!(legacy.model_for(false), "deepseek-v4-flash");
+        assert_eq!(legacy.model_for(true), "deepseek-v4-flash");
+        legacy.vision_model = Some("  ".into());
+        assert_eq!(legacy.model_for(true), "deepseek-v4-flash");
+        legacy.vision_model = Some("glm-4v-flash".into());
+        assert_eq!(legacy.model_for(true), "glm-4v-flash");
+        assert_eq!(legacy.model_for(false), "deepseek-v4-flash");
     }
 }

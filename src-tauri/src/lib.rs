@@ -178,6 +178,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::capture_inbox,
+            commands::capture_inbox_image,
+            commands::read_inbox_image,
+            commands::read_image_file_base64,
             commands::list_inbox,
             commands::list_tasks,
             commands::list_archived_tasks,

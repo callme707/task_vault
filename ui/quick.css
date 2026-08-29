@@ -68,6 +68,40 @@ textarea:focus {
 .actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 #status { color: #8b91a9; font-size: 12px; margin-right: auto; }
 
+/* 附加截图预览 */
+.img-preview {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 96px;
+  flex-shrink: 0;
+}
+.img-preview img {
+  max-height: 96px;
+  max-width: 50%;
+  border-radius: 8px;
+  border: 1px solid #323748;
+  object-fit: contain;
+  background: #1c1f2a;
+}
+.img-preview .img-tip { color: #676e8c; font-size: 11px; }
+#btn-remove-img {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid #3a3f52;
+  background: rgba(23, 26, 38, 0.85);
+  color: #c9cde0;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+#btn-remove-img:hover { color: #fff; border-color: #e5484d; }
+
 .btn {
   border: 1px solid #323748;
   background: #232633;
