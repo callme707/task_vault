@@ -8,8 +8,13 @@
 </head>
 <body>
   <div class="quick-card">
-    <div class="hint">快速记录 · <kbd>Enter</kbd> 保存 · <kbd>Shift+Enter</kbd> 换行 · <kbd>Esc</kbd> 隐藏</div>
-    <textarea id="task-input" placeholder="记下任务 / 需求 / 想法，AI 会自动整理…"></textarea>
+    <div class="hint">快速记录 · 可 <kbd>Ctrl+V</kbd> 粘贴截图 · <kbd>Enter</kbd> 保存 · <kbd>Shift+Enter</kbd> 换行 · <kbd>Esc</kbd> 隐藏</div>
+    <textarea id="task-input" placeholder="记下任务 / 需求 / 想法，或粘贴截图让 AI 提取待办…"></textarea>
+    <div id="img-preview" class="img-preview hidden">
+      <img id="img-thumb" alt="待解析截图" />
+      <button id="btn-remove-img" title="移除图片">×</button>
+      <span class="img-tip">截图将交给 AI 提取待办</span>
+    </div>
     <div class="actions">
       <span id="status"></span>
       <button id="btn-save" class="btn primary">保存 (Enter)</button>

@@ -33,6 +33,10 @@
       <div class="panel-head"><h2>记录详情 / 转正草稿</h2></div>
       <div id="detail-empty" class="empty">在左侧选择一条临时记录</div>
       <div id="detail-content" class="detail hidden">
+        <div id="detail-image" class="detail-image hidden">
+          <div class="block-title">附图</div>
+          <img id="detail-img" alt="记录截图" />
+        </div>
         <div class="raw-block">
           <div class="block-title">原始记录（永不删除）</div>
           <pre id="raw-text"></pre>
@@ -128,6 +132,10 @@
           <label class="field">模型
             <input id="s-model" type="text" placeholder="deepseek-v4-flash / claude-sonnet-4-5" />
             <span class="hint">需与服务商匹配，例如 DeepSeek 填 deepseek-v4-flash，Anthropic 填 claude-sonnet-4-5。</span>
+          </label>
+          <label class="field">视觉模型（图片解析）
+            <input id="s-vision-model" type="text" placeholder="留空则用上面的主模型" />
+            <span class="hint">粘贴截图解析待办需要支持看图的模型，如 gpt-4o-mini、glm-4v-flash、qwen-vl-plus、claude 系列等（DeepSeek 当前无视觉模型）。</span>
           </label>
         </div>
 

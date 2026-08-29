@@ -51,7 +51,7 @@ function renderInbox() {
   }
   list.innerHTML = state.inbox.map((it) => `
     <div class="item ${it.id === state.selectedId ? "active" : ""}" data-id="${it.id}">
-      <div class="text">${esc(it.raw_text)}</div>
+      <div class="text">${it.image_path ? '<span class="img-flag">🖼</span> ' : ""}${esc(it.raw_text || (it.image_path ? "（图片记录）" : ""))}</div>
       <div class="meta">
         <span class="badge ${it.ai_status}">${statusText[it.ai_status] || it.ai_status}</span>
         ${it.is_promoted ? '<span class="badge promoted">已转正</span>' : ""}
@@ -389,14 +389,30 @@ function parseAiResult(raw) {
   try { return raw ? JSON.parse(raw) : null; } catch { return null; }
 }
 
-function renderDetail(id) {
+async function renderDetail(id) {
   const it = state.inbox.find((x) => x.id === id);
   if (!it) return;
 
   document.getElementById("detail-empty").classList.add("hidden");
   const box = document.getElementById("detail-content");
   box.classList.remove("hidden");
-  document.getElementById("raw-text").textContent = it.raw_text;
+
+  // 附图预览
+  const imgBlock = document.getElementById("detail-image");
+  const imgEl = document.getElementById("detail-img");
+  if (it.image_path) {
+    imgBlock.classList.remove("hidden");
+    try {
+      imgEl.src = await invoke("read_inbox_image", { id: it.id });
+    } catch {
+      imgBlock.classList.add("hidden");
+    }
+  } else {
+    imgBlock.classList.add("hidden");
+    imgEl.src = "";
+  }
+
+  document.getElementById("raw-text").textContent = it.raw_text || (it.image_path ? "（无文字说明，仅图片）" : "");
   document.getElementById("ai-status").textContent = statusText[it.ai_status] || it.ai_status;
   document.getElementById("ai-status").className = `badge ${it.ai_status}`;
   document.getElementById("ai-model").textContent = it.ai_model ? `模型：${it.ai_model}` : "";
@@ -421,7 +437,7 @@ function renderDetail(id) {
       : "暂无 AI 解析结果。";
   }
 
-  document.getElementById("f-title").value = ai?.title || it.raw_text.slice(0, 40);
+  document.getElementById("f-title").value = ai?.title || it.raw_text.slice(0, 40) || (it.image_path ? "图片任务" : "");
   document.getElementById("f-kind").value = ai?.kind || "task";
   document.getElementById("f-priority").value = ai?.priority || "P2";
   document.getElementById("f-status").value = "todo";
@@ -492,6 +508,7 @@ async function loadSettings() {
   document.getElementById("s-api-key").value = currentSettings.api_key || "";
   document.getElementById("s-base-url").value = currentSettings.base_url;
   document.getElementById("s-model").value = currentSettings.model;
+  document.getElementById("s-vision-model").value = currentSettings.vision_model || "";
   document.getElementById("s-auto-parse").checked = !!currentSettings.auto_parse;
   document.getElementById("s-autostart").checked = !!currentSettings.autostart;
 }
@@ -502,6 +519,7 @@ async function saveSettings() {
     provider: document.getElementById("s-provider").value,
     base_url: document.getElementById("s-base-url").value.trim() || "https://api.deepseek.com",
     model: document.getElementById("s-model").value.trim() || "deepseek-v4-flash",
+    vision_model: document.getElementById("s-vision-model").value.trim() || null,
     auto_parse: document.getElementById("s-auto-parse").checked,
     autostart: document.getElementById("s-autostart").checked,
     // 快捷键暂未开放界面编辑，保留后端当前值，避免保存时被重置回默认。

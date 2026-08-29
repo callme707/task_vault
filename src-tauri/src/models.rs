@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
-pub struct InboxItem {    pub id: i64,
+pub struct InboxItem {
+    pub id: i64,
     pub raw_text: String,
     pub source: String,
     pub created_at: String,
@@ -10,6 +11,8 @@ pub struct InboxItem {    pub id: i64,
     pub ai_model: Option<String>,
     pub is_promoted: bool,
     pub deleted_at: Option<String>,
+    /// 随记录保存的截图/图片附件文件名，无图时为 None
+    pub image_path: Option<String>,
 }
 
 /// AI 解析出的结构化结果。字段全部可选，避免模型少返回一个字段导致整条解析失败。
@@ -39,6 +42,10 @@ pub struct AiParsed {
     pub missing_info: Vec<String>,
     #[serde(default)]
     pub summary: String,
+    /// 图片解析时模型可能一次返回多个待办；文本解析为空。
+    /// 入库时会被拆开：每条待办各占一条收件箱记录，ai_result 不保留该字段。
+    #[serde(default)]
+    pub items: Vec<AiParsed>,
 }
 
 /// 任务下的子任务清单。转正时来自 AI 解析结果，之后可增删、勾选完成。

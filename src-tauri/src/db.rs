@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS inbox (
     ai_result    TEXT,
     ai_model     TEXT,
     is_promoted  INTEGER NOT NULL DEFAULT 0,
-    deleted_at   TEXT
+    deleted_at   TEXT,
+    image_path   TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_inbox_created ON inbox(created_at DESC);
@@ -95,6 +96,7 @@ impl Db {
             .map_err(|e| e.to_string())?;
         ensure_column(&tasks, "tasks", "is_archived", "INTEGER NOT NULL DEFAULT 0")?;
         ensure_column(&tasks, "tasks", "deleted_at", "TEXT")?;
+        ensure_column(&inbox, "inbox", "image_path", "TEXT")?;
 
         Ok(Self {
             inbox: Arc::new(Mutex::new(inbox)),
@@ -102,15 +104,20 @@ impl Db {
         })
     }
 
-    pub fn insert_inbox(&self, raw_text: &str, source: &str) -> Result<InboxItem, String> {
+    pub fn insert_inbox(
+        &self,
+        raw_text: &str,
+        source: &str,
+        image_path: Option<&str>,
+    ) -> Result<InboxItem, String> {
         let conn = self
             .inbox
             .lock()
             .map_err(|_| "inbox db lock poisoned".to_string())?;
         let now = Local::now().to_rfc3339();
         conn.execute(
-            "INSERT INTO inbox(raw_text, source, created_at, ai_status) VALUES (?1, ?2, ?3, 'pending')",
-            params![raw_text, source, now],
+            "INSERT INTO inbox(raw_text, source, created_at, ai_status, image_path) VALUES (?1, ?2, ?3, 'pending', ?4)",
+            params![raw_text, source, now, image_path],
         )
         .map_err(|e| e.to_string())?;
         let id = conn.last_insert_rowid();
@@ -132,9 +139,9 @@ impl Db {
             .lock()
             .map_err(|_| "inbox db lock poisoned".to_string())?;
         let sql = if include_deleted {
-            "SELECT id, raw_text, source, created_at, ai_status, ai_result, ai_model, is_promoted, deleted_at FROM inbox ORDER BY id DESC"
+            "SELECT id, raw_text, source, created_at, ai_status, ai_result, ai_model, is_promoted, deleted_at, image_path FROM inbox ORDER BY id DESC"
         } else {
-            "SELECT id, raw_text, source, created_at, ai_status, ai_result, ai_model, is_promoted, deleted_at FROM inbox WHERE deleted_at IS NULL ORDER BY id DESC"
+            "SELECT id, raw_text, source, created_at, ai_status, ai_result, ai_model, is_promoted, deleted_at, image_path FROM inbox WHERE deleted_at IS NULL ORDER BY id DESC"
         };
         let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
         let rows = stmt
@@ -510,7 +517,7 @@ impl Db {
 
 fn row_to_inbox(conn: &Connection, id: i64) -> rusqlite::Result<InboxItem> {
     conn.query_row(
-        "SELECT id, raw_text, source, created_at, ai_status, ai_result, ai_model, is_promoted, deleted_at FROM inbox WHERE id=?1",
+        "SELECT id, raw_text, source, created_at, ai_status, ai_result, ai_model, is_promoted, deleted_at, image_path FROM inbox WHERE id=?1",
         params![id],
         inbox_from_row,
     )
@@ -527,6 +534,7 @@ fn inbox_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<InboxItem> {
         ai_model: row.get(6)?,
         is_promoted: row.get::<_, i64>(7)? != 0,
         deleted_at: row.get(8)?,
+        image_path: row.get(9)?,
     })
 }
 
@@ -626,9 +634,16 @@ mod tests {
 
         let db = Db::open(&inbox_p, &tasks_p).unwrap();
         let item = db
-            .insert_inbox("做一个 Rust 任务记录工具", "hotkey")
+            .insert_inbox("做一个 Rust 任务记录工具", "hotkey", None)
             .unwrap();
         assert_eq!(item.ai_status, "pending");
+        assert!(item.image_path.is_none());
+
+        // 带图片附件的记录
+        let img_item = db
+            .insert_inbox("", "image", Some("20260829_1.png"))
+            .unwrap();
+        assert_eq!(img_item.image_path.as_deref(), Some("20260829_1.png"));
 
         db.set_ai_processing(item.id).unwrap();
         db.set_ai_result(
@@ -662,7 +677,8 @@ mod tests {
         db.mark_promoted(item.id).unwrap();
         assert!(db.get_inbox(item.id).unwrap().is_promoted);
         assert_eq!(db.list_tasks().unwrap().len(), 1);
-        assert_eq!(db.list_inbox(false).unwrap().len(), 1);
+        // 收件箱里有文字记录 + 图片记录两条
+        assert_eq!(db.list_inbox(false).unwrap().len(), 2);
 
         // 子任务：转正带入 → 勾选 / 追加 / 删除
         let done = db.set_subtask_done(task.subtasks[0].id, true).unwrap();
@@ -695,8 +711,8 @@ mod tests {
         assert_eq!(db.list_archived_tasks().unwrap().len(), 0);
 
         db.soft_delete_inbox(item.id).unwrap();
-        assert_eq!(db.list_inbox(false).unwrap().len(), 0);
-        assert_eq!(db.list_inbox(true).unwrap().len(), 1);
+        assert_eq!(db.list_inbox(false).unwrap().len(), 1);
+        assert_eq!(db.list_inbox(true).unwrap().len(), 2);
 
         let _ = std::fs::remove_file(&inbox_p);
         let _ = std::fs::remove_file(&tasks_p);

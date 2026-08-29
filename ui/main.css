@@ -564,6 +564,18 @@ textarea { min-height: 68px; resize: vertical; }
 .subtask-add { display: flex; gap: 8px; margin-top: 10px; }
 .subtask-add input { flex: 1; min-width: 0; }
 
+/* ===== 详情附图 ===== */
+.detail-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  object-fit: contain;
+}
+.img-flag { margin-right: 2px; }
+
 /* ===== 轻提示 ===== */
 .toast {
   position: fixed;
