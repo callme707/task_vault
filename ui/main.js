@@ -483,10 +483,24 @@ async function promoteSelected() {
 }
 
 async function refreshAll() {
+  const prevInbox = state.inbox;
+  const prevTasks = state.tasks;
   await Promise.all([refreshInbox(), refreshTasks()]);
-  if (state.selectedId) renderDetail(state.selectedId);
+
+  // 详情表单只在该记录实际变化时才重填，避免用户编辑草稿时被刷新覆盖
+  if (state.selectedId) {
+    const cur = state.inbox.find((x) => x.id === state.selectedId);
+    const prev = prevInbox.find((x) => x.id === state.selectedId);
+    const changed = !prev
+      || !cur
+      || cur.ai_status !== prev.ai_status
+      || cur.ai_result !== prev.ai_result
+      || cur.is_promoted !== prev.is_promoted;
+    if (changed) renderDetail(state.selectedId);
+  }
   // 编辑弹窗打开时，子任务操作走即时落库 + tasks-updated 事件，这里只刷新子任务区域。
   if (state.editingId) renderEditSubtasks();
+  return { inboxChanged: prevInbox !== state.inbox, tasksChanged: prevTasks !== state.tasks };
 }
 
 let currentSettings = null;
@@ -593,6 +607,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   await listen("inbox-updated", () => refreshAll());
   await listen("tasks-updated", () => refreshAll());
+
+  // 兜底刷新：主窗口隐藏时 WebView 可能被挂起导致事件丢失，聚焦/重新可见时补一次；
+  // 再加低频轮询（本地 SQLite 查询开销极小），保证不依赖事件也能自动更新。
+  window.addEventListener("focus", () => refreshAll());
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshAll();
+  });
+  setInterval(() => {
+    if (!document.hidden) refreshAll();
+  }, 4000);
 
   await refreshAll();
 });

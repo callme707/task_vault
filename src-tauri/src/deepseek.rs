@@ -66,7 +66,7 @@ pub fn encode_image(bytes: &[u8]) -> Result<ImageInput, AiError> {
 }
 
 const SYSTEM_PROMPT: &str = r#"你是一个任务收件箱整理助手。用户会把一句话需求、待办、想法或聊天记录发给你。
-请只输出一个 JSON 对象（response_format 已要求 JSON），不要输出 Markdown 或解释文字。
+请只输出一个 JSON 对象（response_format 已要求 JSON），不要输出 Markdown 或解释文字。输出为紧凑单行 JSON，不要缩进换行。
 
 任务要求：
 1. is_actionable: 是否值得转入正式任务库。闲聊、纯情绪、无行动内容为 false。
@@ -117,7 +117,8 @@ const IMAGE_SYSTEM_PROMPT: &str = r#"你是任务收件箱整理助手。用户�
 11. missing_info: 影响执行但缺失的信息
 12. summary: 一句话概括该条
 
-要求：每个独立待办各占一项，聊天记录里不同人认领的事拆开；不要遗漏、不要臆造；图中没有可行动内容时 items 返回空数组。"#;
+要求：每个独立待办各占一项，聊天记录里不同人认领的事拆开；不要遗漏、不要臆造；图中没有可行动内容时 items 返回空数组。
+为节省输出预算：输出为紧凑单行 JSON，不要缩进换行；除 title/description/kind/priority 外，字段不确定或为空时直接省略该字段（不要输出 null 或空数组）。"#;
 
 fn now_line() -> String {
     Local::now().format("当前时间：%Y-%m-%d %H:%M:%S %A").to_string()
@@ -279,18 +280,103 @@ async fn check_status(resp: reqwest::Response) -> Result<String, AiError> {
     Ok(text)
 }
 
-/// 容错提取模型输出中的 JSON：直接解析 → 剥离 ``` 代码块包裹 → 截取首个 {...} 平衡片段。
-/// 图片模式没有 response_format 强约束，模型偶尔会加说明文字，这里保证尽量能取出对象。
-fn parse_content_json(content: &str) -> Result<AiParsed, AiError> {
-    if let Ok(p) = serde_json::from_str::<AiParsed>(content) {
-        return Ok(p);
+/// 部分 vLLM 自建栈不分离思维链，会把 <think>...</think> 直接混在 content 里。
+fn strip_reasoning(content: &str) -> &str {
+    if let Some(end) = content.rfind("</think>") {
+        return &content[end + "</think>".len()..];
     }
-    let trimmed = content
+    // 只有 <think> 开头且未闭合：全部是推理，正文没来得及输出
+    if content.trim_start().starts_with("<think>") {
+        return "";
+    }
+    content
+}
+
+/// 截断 JSON 抢救：截到最后一个完整值，去掉不完整的键值对，补齐未闭合括号。
+/// 能把“输出到一半被掐断”里已完成的待办救回来。
+fn salvage_json(s: &str) -> Option<AiParsed> {
+    let scan_str_state = |head: &str| -> (bool, Option<usize>) {
+        // 返回 (是否断在字符串内, 最后一个字符串外逗号的字节位置)
+        let mut in_str = false;
+        let mut esc = false;
+        let mut last_comma = None;
+        for (i, ch) in head.char_indices() {
+            if in_str {
+                if esc {
+                    esc = false;
+                } else if ch == '\\' {
+                    esc = true;
+                } else if ch == '"' {
+                    in_str = false;
+                }
+            } else if ch == '"' {
+                in_str = true;
+            } else if ch == ',' {
+                last_comma = Some(i);
+            }
+        }
+        (in_str, last_comma)
+    };
+
+    // 有 '}' 截到其后；一个都没有（首个对象未闭合）则扫描全文，靠逗号回撤退掉残缺键值对
+    let close_idx = s.rfind('}');
+    let scan_end = close_idx.map_or(s.len(), |i| i + 1);
+    let (in_str, last_comma) = scan_str_state(&s[..scan_end]);
+    let mut end = scan_end;
+    if in_str || close_idx.is_none() {
+        end = last_comma?;
+    }
+    if end == 0 {
+        return None;
+    }
+    let head = &s[..end];
+
+    // 统计未闭合括号
+    let mut stack = Vec::new();
+    let mut in_str = false;
+    let mut esc = false;
+    for ch in head.chars() {
+        if in_str {
+            if esc {
+                esc = false;
+            } else if ch == '\\' {
+                esc = true;
+            } else if ch == '"' {
+                in_str = false;
+            }
+        } else {
+            match ch {
+                '"' => in_str = true,
+                '{' | '[' => stack.push(ch),
+                '}' | ']' => {
+                    stack.pop();
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut fixed = head.to_string();
+    while let Some(open) = stack.pop() {
+        fixed.push(if open == '{' { '}' } else { ']' });
+    }
+    serde_json::from_str::<AiParsed>(&fixed).ok()
+}
+
+/// 容错提取模型输出中的 JSON：直接解析 → 剥离思考与 ``` 包裹 → 截取 {...} 片段 → 截断抢救。
+fn parse_content_json(content: &str) -> Result<AiParsed, AiError> {
+    let stripped = strip_reasoning(content);
+    if stripped.trim().is_empty() {
+        return Err(AiError::Api(
+            "模型只输出了思考过程就被截断（推理耗尽了输出预算），请在设置中更换为非推理型视觉模型".into(),
+        ));
+    }
+    let trimmed = stripped
         .trim()
         .trim_start_matches("```json")
         .trim_start_matches("```")
         .trim_end_matches("```")
         .trim();
+
     if let Ok(p) = serde_json::from_str::<AiParsed>(trimmed) {
         return Ok(p);
     }
@@ -301,10 +387,20 @@ fn parse_content_json(content: &str) -> Result<AiParsed, AiError> {
             }
         }
     }
-    Err(AiError::Api(format!(
-        "返回内容不是合法 JSON: {}",
-        content.chars().take(200).collect::<String>()
-    )))
+    // 输出被中途掐断时救回已完成的待办
+    if let Some(start) = trimmed.find('{') {
+        if let Some(p) = salvage_json(&trimmed[start..]) {
+            return Ok(p);
+        }
+    }
+
+    let preview: String = content.chars().take(200).collect();
+    if !stripped.trim_end().ends_with('}') {
+        return Err(AiError::Api(format!(
+            "输出被截断（未正常结束），该服务商疑似忽略了 max_tokens 参数或另有输出上限，建议更换视觉模型验证。收到的内容：{preview}"
+        )));
+    }
+    Err(AiError::Api(format!("返回内容不是合法 JSON: {preview}")))
 }
 
 #[cfg(test)]
@@ -332,6 +428,36 @@ mod tests {
         assert_eq!(p.title, "c");
 
         assert!(parse_content_json("今天天气不错").is_err());
+    }
+
+    #[test]
+    fn strips_inline_reasoning() {
+        // vLLM 混排思维链：取 </think> 之后的内容
+        let p = parse_content_json("<think>我先分析一下 {图片} 里的内容...</think>{\"title\":\"d\"}")
+            .unwrap();
+        assert_eq!(p.title, "d");
+        // 只有未闭合的 <think>：判定为只有推理
+        assert!(parse_content_json("<think>推理中...被截断").is_err());
+    }
+
+    #[test]
+    fn salvages_truncated_items() {
+        // 第二个待办被掐断：第一个应能救回
+        let s = r#"{"items":[{"title":"a","kind":"task"},{"title":"b","deadli"#;
+        let p = parse_content_json(s).unwrap();
+        assert_eq!(p.items.len(), 1);
+        assert_eq!(p.items[0].title, "a");
+
+        // 断在字符串值中间
+        let s = r#"{"items":[{"title":"a","deadline":"2026-09"#;
+        let p = parse_content_json(s).unwrap();
+        assert_eq!(p.items.len(), 1);
+        assert_eq!(p.items[0].title, "a");
+        assert!(p.items[0].deadline.is_none());
+
+        // 第一个对象都没闭合：救不回，报截断类错误
+        let err = parse_content_json(r#"{"items":[{"title":"a"#).unwrap_err();
+        assert!(err.to_string().contains("截断") || err.to_string().contains("JSON"));
     }
 
     #[test]

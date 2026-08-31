@@ -22,6 +22,9 @@ fn attachments_dir(state: &State<'_, AppState>) -> std::path::PathBuf {
 
 /// 录入后的 AI 解析调度：按设置决定自动解析 / 未配置 / 跳过，异步执行不阻塞录入。
 fn trigger_parse(app: &AppHandle, state: &State<'_, AppState>, id: i64) {
+    // 录入即通知前端刷新，让“待解析”条目立刻出现在列表里，而不是等 AI 跑完
+    let _ = app.emit("inbox-updated", id);
+
     let settings = match state.settings.read() {
         Ok(s) => s.clone(),
         Err(_) => return,
