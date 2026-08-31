@@ -422,21 +422,45 @@ async function renderDetail(id) {
   if (it.ai_status === "failed") {
     aiBox.textContent = `解析失败：${it.ai_result || "未知错误"}\n可点“重新解析”重试，多次失败请检查网络或 API Key。`;
   } else if (ai) {
-    aiBox.textContent = [
-      `类型：${ai.kind || "-"}  优先级：${ai.priority || "-"}  把握：${ai.confidence ?? "-"}`,
-      ai.summary ? `总结：${ai.summary}` : "",
-      ai.deadline ? `截止：${ai.deadline}` : "",
-      ai.estimate_minutes ? `预估：${ai.estimate_minutes} 分钟` : "",
-      ai.tags?.length ? `标签：${ai.tags.join(", ")}` : "",
-      ai.subtasks?.length ? `子任务：${ai.subtasks.join("；")}` : "",
-      ai.missing_info?.length ? `待补充：${ai.missing_info.join("；")}` : "",
-    ].filter(Boolean).join("\n");
+    const lines = [];
+    if (ai.items?.length) {
+      lines.push(`识别出 ${ai.items.length} 个待办，可在下方“待办选择”切换要转正的那一个`);
+      if (ai.summary) lines.push(`图片概述：${ai.summary}`);
+    } else {
+      lines.push(`类型：${ai.kind || "-"}  优先级：${ai.priority || "-"}  把握：${ai.confidence ?? "-"}`);
+      if (ai.summary) lines.push(`总结：${ai.summary}`);
+      if (ai.deadline) lines.push(`截止：${ai.deadline}`);
+      if (ai.estimate_minutes) lines.push(`预估：${ai.estimate_minutes} 分钟`);
+      if (ai.tags?.length) lines.push(`标签：${ai.tags.join(", ")}`);
+      if (ai.subtasks?.length) lines.push(`子任务：${ai.subtasks.join("；")}`);
+      if (ai.missing_info?.length) lines.push(`待补充：${ai.missing_info.join("；")}`);
+    }
+    aiBox.textContent = lines.join("\n");
   } else {
     aiBox.textContent = it.ai_status === "unconfigured"
-      ? "未配置 DeepSeek API Key，点右上角“设置”填写后重新解析。"
+      ? "未配置 API Key，点右上角“设置”填写后重新解析。"
       : "暂无 AI 解析结果。";
   }
 
+  // 图片多待办：提供选择器切换填充草稿；普通记录直接填
+  const items = ai?.items?.length ? ai.items : null;
+  const itemSel = document.getElementById("f-item");
+  const itemWrap = document.getElementById("f-item-wrap");
+  if (items) {
+    itemWrap.classList.remove("hidden");
+    itemSel.innerHTML = items
+      .map((x, i) => `<option value="${i}">${esc(x.title || `待办 ${i + 1}`)}</option>`)
+      .join("");
+    itemSel.onchange = () => fillDraftFromItem(items[Number(itemSel.value)], it);
+    fillDraftFromItem(items[0], it);
+  } else {
+    itemWrap.classList.add("hidden");
+    itemSel.onchange = null;
+    fillDraftFromItem(ai, it);
+  }
+}
+
+function fillDraftFromItem(ai, it) {
   document.getElementById("f-title").value = ai?.title || it.raw_text.slice(0, 40) || (it.image_path ? "图片任务" : "");
   document.getElementById("f-kind").value = ai?.kind || "task";
   document.getElementById("f-priority").value = ai?.priority || "P2";

@@ -233,32 +233,10 @@ async fn parse_inbox_with_retry(
     for attempt in 0..3 {
         match deepseek::parse_inbox_text(http, settings, &item.raw_text, image.as_ref()).await {
             Ok(parsed) => {
-                // 图片解析可能一次返回多个待办：首条留在原记录，其余拆成新记录（共享同一张图）
-                let store = |a: &crate::models::AiParsed| {
-                    serde_json::to_string(&crate::models::AiParsed {
-                        items: Vec::new(),
-                        ..a.clone()
-                    })
-                    .unwrap_or_else(|_| "{}".to_string())
-                };
-                if parsed.items.is_empty() {
-                    let _ = db.set_ai_result(id, "done", Some(&store(&parsed)), Some(&model_used));
-                } else {
-                    let _ = db.set_ai_result(id, "done", Some(&store(&parsed.items[0])), Some(&model_used));
-                    for extra in parsed.items.iter().skip(1) {
-                        let raw = format!("[图片待办] {}", extra.title);
-                        if let Ok(new_item) =
-                            db.insert_inbox(&raw, "image-split", item.image_path.as_deref())
-                        {
-                            let _ = db.set_ai_result(
-                                new_item.id,
-                                "done",
-                                Some(&store(extra)),
-                                Some(&model_used),
-                            );
-                        }
-                    }
-                }
+                // 一张图片只对应一条收件箱记录：多待办整体存在 ai_result 里，
+                // 由前端详情页展示并在转正时选择，避免拆分产生重复记录
+                let json = serde_json::to_string(&parsed).unwrap_or_else(|_| "{}".to_string());
+                let _ = db.set_ai_result(id, "done", Some(&json), Some(&model_used));
                 return Ok(());
             }
             Err(e) => {
