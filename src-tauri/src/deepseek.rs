@@ -30,6 +30,11 @@ pub struct ImageInput {
 /// 单图大小上限（Anthropic 单请求 5MB，留余量）
 pub const MAX_IMAGE_BYTES: usize = 4 * 1024 * 1024;
 
+/// 输出 token 上限。图片模式给足余量：推理型多模态模型（如 mimo/qwen-vl 系列）
+/// 会先生成思维链再输出正文，推理 token 一并计入上限，给小了 JSON 会被拦腰截断。
+const TEXT_MAX_TOKENS: u32 = 2048;
+const IMAGE_MAX_TOKENS: u32 = 8192;
+
 /// 按文件头魔数识别常见图片格式
 pub fn sniff_image_mime(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
@@ -174,7 +179,7 @@ async fn parse_with_openai(
             {"role": "system", "content": system},
             {"role": "user", "content": user_content}
         ],
-        "max_tokens": 1600,
+        "max_tokens": if with_image { IMAGE_MAX_TOKENS } else { TEXT_MAX_TOKENS },
         "stream": false
     });
     if !with_image {
@@ -191,6 +196,13 @@ async fn parse_with_openai(
 
     let text = check_status(resp).await?;
     let value: Value = serde_json::from_str(&text)?;
+    // 输出被 max_tokens 掐断时 finish_reason=length，此时 JSON 必然不完整，
+    // 提前给出可定位的报错，而不是让下游报“不是合法 JSON”
+    if value.pointer("/choices/0/finish_reason").and_then(Value::as_str) == Some("length") {
+        return Err(AiError::Api(
+            "模型输出被长度上限截断（finish_reason=length），该模型推理开销较大，建议换非推理视觉模型或降低图片复杂度".into(),
+        ));
+    }
     let content = value
         .pointer("/choices/0/message/content")
         .and_then(Value::as_str)
@@ -218,7 +230,7 @@ async fn parse_with_anthropic(
 
     let body = json!({
         "model": settings.model_for(with_image),
-        "max_tokens": 1600,
+        "max_tokens": if with_image { IMAGE_MAX_TOKENS } else { TEXT_MAX_TOKENS },
         "system": system,
         "messages": [
             {"role": "user", "content": user_content}
