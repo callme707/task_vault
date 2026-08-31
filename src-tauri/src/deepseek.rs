@@ -184,6 +184,16 @@ async fn parse_with_openai(
     });
     if !with_image {
         body["response_format"] = json!({"type": "json_object"});
+    } else {
+        // 部分较新的推理模型栈只认 max_completion_tokens，与 max_tokens 同时携带以兼容
+        body["max_completion_tokens"] = json!(IMAGE_MAX_TOKENS);
+        // 推理 token 计入输出上限，截断多因思维链烧完预算；不同服务商关思考的参数不同，
+        // 三种常见写法同时携带，不认识的字段会被服务端忽略。严格校验的服务商可在设置中关掉。
+        if settings.disable_reasoning {
+            body["thinking"] = json!({"type": "disabled"});
+            body["enable_thinking"] = json!(false);
+            body["chat_template_kwargs"] = json!({"enable_thinking": false});
+        }
     }
 
     let url = format!("{}/chat/completions", settings.normalized_base_url());

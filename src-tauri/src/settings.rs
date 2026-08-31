@@ -24,6 +24,11 @@ pub struct Settings {
     /// 解析图片用的视觉模型；留空则用主模型（主模型需自身支持视觉）
     #[serde(default)]
     pub vision_model: Option<String>,
+    /// 图片解析时尝试关闭模型推理/思考（推理 token 无法不计入输出上限，关掉才是根治）。
+    /// 会同时携带 DeepSeek/GLM、Qwen、vLLM 三种常见参数写法，服务商不认识的会忽略；
+    /// 个别严格校验的服务商若因此报参数错误，可在设置中关闭。
+    #[serde(default = "default_true")]
+    pub disable_reasoning: bool,
     pub auto_parse: bool,
     pub autostart: bool,
     pub quick_hotkey: String,
@@ -34,6 +39,10 @@ fn default_provider() -> String {
     PROVIDER_OPENAI.to_string()
 }
 
+fn default_true() -> bool {
+    true
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -42,6 +51,7 @@ impl Default for Settings {
             model: DEFAULT_MODEL.to_string(),
             provider: PROVIDER_OPENAI.to_string(),
             vision_model: None,
+            disable_reasoning: true,
             auto_parse: true,
             autostart: false,
             quick_hotkey: DEFAULT_QUICK_HOTKEY.to_string(),

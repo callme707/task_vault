@@ -509,6 +509,7 @@ async function loadSettings() {
   document.getElementById("s-base-url").value = currentSettings.base_url;
   document.getElementById("s-model").value = currentSettings.model;
   document.getElementById("s-vision-model").value = currentSettings.vision_model || "";
+  document.getElementById("s-disable-reasoning").checked = currentSettings.disable_reasoning !== false;
   document.getElementById("s-auto-parse").checked = !!currentSettings.auto_parse;
   document.getElementById("s-autostart").checked = !!currentSettings.autostart;
 }
@@ -520,6 +521,7 @@ async function saveSettings() {
     base_url: document.getElementById("s-base-url").value.trim() || "https://api.deepseek.com",
     model: document.getElementById("s-model").value.trim() || "deepseek-v4-flash",
     vision_model: document.getElementById("s-vision-model").value.trim() || null,
+    disable_reasoning: document.getElementById("s-disable-reasoning").checked,
     auto_parse: document.getElementById("s-auto-parse").checked,
     autostart: document.getElementById("s-autostart").checked,
     // 快捷键暂未开放界面编辑，保留后端当前值，避免保存时被重置回默认。

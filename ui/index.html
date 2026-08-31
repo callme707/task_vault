@@ -137,6 +137,7 @@
             <input id="s-vision-model" type="text" placeholder="留空则用上面的主模型" />
             <span class="hint">粘贴截图解析待办需要支持看图的模型，如 gpt-4o-mini、glm-4v-flash、qwen-vl-plus、claude 系列等（DeepSeek 当前无视觉模型）。</span>
           </label>
+          <label class="check"><input id="s-disable-reasoning" type="checkbox" /> 图片解析时关闭模型思考/推理（推荐：推理 token 会挤占输出上限导致 JSON 截断；个别服务商报参数错误时再关闭此项）</label>
         </div>
 
         <div class="modal-section">
