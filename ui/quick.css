@@ -4,6 +4,8 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: transparent; }
 
+.hidden { display: none !important; }
+
 body {
   font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
   display: flex;
@@ -30,7 +32,11 @@ body {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  /* 顶部提示栏兼作无边框窗口的拖拽把手 */
+  cursor: move;
+  user-select: none;
 }
+.hint kbd { cursor: default; }
 
 kbd {
   display: inline-block;
