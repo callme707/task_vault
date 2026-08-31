@@ -32,8 +32,9 @@ pub const MAX_IMAGE_BYTES: usize = 4 * 1024 * 1024;
 
 /// 输出 token 上限。图片模式给足余量：推理型多模态模型（如 mimo/qwen-vl 系列）
 /// 会先生成思维链再输出正文，推理 token 一并计入上限，给小了 JSON 会被拦腰截断。
+/// MiMo 官方文档明确：max_completion_tokens 限制的是“思考+正文”总量，建议给足。
 const TEXT_MAX_TOKENS: u32 = 2048;
-const IMAGE_MAX_TOKENS: u32 = 8192;
+const IMAGE_MAX_TOKENS: u32 = 16384;
 
 /// 按文件头魔数识别常见图片格式
 pub fn sniff_image_mime(bytes: &[u8]) -> Option<&'static str> {
@@ -98,27 +99,19 @@ const SYSTEM_PROMPT: &str = r#"你是一个任务收件箱整理助手。用户�
   "summary": "需要为 OA 导出功能增加部门筛选"
 }"#;
 
-const IMAGE_SYSTEM_PROMPT: &str = r#"你是任务收件箱整理助手。用户发来一张截图或照片（可能附带一句话说明），请识别图中所有待办事项、任务、需求或别人交给用户办的事，输出一个 JSON 对象，不要输出 Markdown 或解释文字。
+const IMAGE_SYSTEM_PROMPT: &str = r#"你的回复会被程序直接解析，硬性格式要求（违反则解析失败）：只输出一个紧凑单行 JSON 对象；禁止 Markdown 代码块、禁止缩进换行、禁止任何解释文字。
 
-输出结构：
-{"items": [待办对象, ...], "summary": "一句话概括整张图的内容"}
+结构：{"items":[每个待办一个对象],"summary":"一句话概括整张图"}
 
-每个待办对象的字段：
-1. is_actionable: 是否可行动
-2. kind: task(具体待办) / requirement(需求) / idea(想法) / note(纯记录)
-3. title: 不超过 40 字的标题
-4. description: 一句话可执行描述，保留图中关键上下文（负责人、时间、系统名等）
-5. priority: P0/P1/P2/P3，缺省 P2
-6. deadline: 图中有明确截止时间才填，格式 yyyy-MM-ddTHH:mm:ss+08:00，否则 null
-7. estimate_minutes: 预估分钟数，不确定 null
-8. tags: 2-4 个短标签
-9. subtasks: 需要时可拆子任务数组
-10. confidence: 0-1 把握
-11. missing_info: 影响执行但缺失的信息
-12. summary: 一句话概括该条
+每个待办对象只允许这些字段，用不到的必须省略（不要输出 null/空值）：
+- title：不超过 40 字
+- description：一句话可执行描述，保留图中关键上下文（负责人、时间、系统名）
+- kind：task/requirement/idea/note
+- priority：P0/P1/P2/P3，缺省 P2
+- deadline：图中有明确截止时间才填，格式 yyyy-MM-ddTHH:mm:ss+08:00
+- tags：短标签数组
 
-要求：每个独立待办各占一项，聊天记录里不同人认领的事拆开；不要遗漏、不要臆造；图中没有可行动内容时 items 返回空数组。
-为节省输出预算：输出为紧凑单行 JSON，不要缩进换行；除 title/description/kind/priority 外，字段不确定或为空时直接省略该字段（不要输出 null 或空数组）。"#;
+识别要求：图中每个独立待办各占一项，聊天记录里不同人认领的事拆开；不要遗漏、不要臆造；没有可行动内容时 items 返回空数组。"#;
 
 fn now_line() -> String {
     Local::now().format("当前时间：%Y-%m-%d %H:%M:%S %A").to_string()
@@ -174,27 +167,28 @@ async fn parse_with_openai(
         None => json!(user_prompt(raw_text)),
     };
 
+    // 文本模式用 max_tokens（DeepSeek 等传统兼容栈）；图片模式按 MiMo 等新栈
+    // 文档只发 max_completion_tokens（限制“思考+正文”总量），避免端点在两个参数间取错
     let mut body = json!({
         "model": settings.model_for(with_image),
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user_content}
         ],
-        "max_tokens": if with_image { IMAGE_MAX_TOKENS } else { TEXT_MAX_TOKENS },
         "stream": false
     });
-    if !with_image {
-        body["response_format"] = json!({"type": "json_object"});
-    } else {
-        // 部分较新的推理模型栈只认 max_completion_tokens，与 max_tokens 同时携带以兼容
+    if with_image {
         body["max_completion_tokens"] = json!(IMAGE_MAX_TOKENS);
-        // 推理 token 计入输出上限，截断多因思维链烧完预算；不同服务商关思考的参数不同，
-        // 三种常见写法同时携带，不认识的字段会被服务端忽略。严格校验的服务商可在设置中关掉。
-        if settings.disable_reasoning {
-            body["thinking"] = json!({"type": "disabled"});
-            body["enable_thinking"] = json!(false);
-            body["chat_template_kwargs"] = json!({"enable_thinking": false});
-        }
+    } else {
+        body["max_tokens"] = json!(TEXT_MAX_TOKENS);
+        body["response_format"] = json!({"type": "json_object"});
+    }
+    // 推理 token 计入输出上限，截断多因思维链烧完预算；不同服务商关思考的参数不同，
+    // 三种常见写法同时携带，不认识的字段会被服务端忽略。严格校验的服务商可在设置中关掉。
+    if with_image && settings.disable_reasoning {
+        body["thinking"] = json!({"type": "disabled"});
+        body["enable_thinking"] = json!(false);
+        body["chat_template_kwargs"] = json!({"enable_thinking": false});
     }
 
     let url = format!("{}/chat/completions", settings.normalized_base_url());
@@ -207,18 +201,15 @@ async fn parse_with_openai(
 
     let text = check_status(resp).await?;
     let value: Value = serde_json::from_str(&text)?;
-    // 输出被 max_tokens 掐断时 finish_reason=length，此时 JSON 必然不完整，
-    // 提前给出可定位的报错，而不是让下游报“不是合法 JSON”
-    if value.pointer("/choices/0/finish_reason").and_then(Value::as_str) == Some("length") {
-        return Err(AiError::Api(
-            "模型输出被长度上限截断（finish_reason=length），该模型推理开销较大，建议换非推理视觉模型或降低图片复杂度".into(),
-        ));
-    }
     let content = value
         .pointer("/choices/0/message/content")
         .and_then(Value::as_str)
         .ok_or_else(|| AiError::Api(format!("返回结构不符合预期: {text}")))?;
-    parse_content_json(content)
+    match parse_content_json(content) {
+        Ok(p) => Ok(p),
+        // 附上响应元数据便于定位截断原因：finish_reason 与 token 用量
+        Err(e) => Err(AiError::Api(format!("{e}｜{}", usage_line(&value)))),
+    }
 }
 
 /// Anthropic Messages API。
@@ -268,7 +259,13 @@ async fn parse_with_anthropic(
                 .and_then(|b| b.get("text").and_then(Value::as_str))
         })
         .ok_or_else(|| AiError::Api(format!("返回结构不符合预期: {text}")))?;
-    parse_content_json(content)
+    match parse_content_json(content) {
+        Ok(p) => Ok(p),
+        Err(e) => {
+            let stop = value.pointer("/stop_reason").and_then(Value::as_str).unwrap_or("-");
+            Err(AiError::Api(format!("{e}｜stop_reason={stop}")))
+        }
+    }
 }
 
 async fn check_status(resp: reqwest::Response) -> Result<String, AiError> {
@@ -278,6 +275,26 @@ async fn check_status(resp: reqwest::Response) -> Result<String, AiError> {
         return Err(AiError::Api(format!("HTTP {status}: {text}")));
     }
     Ok(text)
+}
+
+/// 提取响应中的截断诊断信息：finish_reason 与 token 用量（含推理 token）。
+/// 例：finish_reason=length, completion=8192 (reasoning=7900), prompt=1500
+fn usage_line(value: &Value) -> String {
+    let finish = value
+        .pointer("/choices/0/finish_reason")
+        .and_then(Value::as_str)
+        .unwrap_or("-");
+    let completion = value
+        .pointer("/usage/completion_tokens")
+        .and_then(Value::as_i64);
+    let reasoning = value
+        .pointer("/usage/completion_tokens_details/reasoning_tokens")
+        .and_then(Value::as_i64);
+    let prompt = value.pointer("/usage/prompt_tokens").and_then(Value::as_i64);
+    format!(
+        "finish_reason={finish}, completion={:?} (reasoning={:?}), prompt={:?}",
+        completion, reasoning, prompt
+    )
 }
 
 /// 部分 vLLM 自建栈不分离思维链，会把 <think>...</think> 直接混在 content 里。
