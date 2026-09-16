@@ -3,24 +3,29 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>快速记录</title>
+  <title>TaskVault · 快速记录</title>
   <link rel="stylesheet" href="quick.css" />
 </head>
 <body>
-  <div class="quick-card">
-    <div class="hint" data-tauri-drag-region title="按住可拖动窗口">快速记录 · 可 <kbd>Ctrl+V</kbd> 粘贴截图 · <kbd>Enter</kbd> 保存 · <kbd>Shift+Enter</kbd> 换行 · <kbd>Esc</kbd> 隐藏</div>
-    <textarea id="task-input" placeholder="记下任务 / 需求 / 想法，或粘贴截图让 AI 提取待办…"></textarea>
+  <main class="quick-card" aria-label="快速记录">
+    <div class="quick-head" data-tauri-drag-region title="按住可拖动窗口">
+      <div class="quick-brand"><span class="quick-mark" aria-hidden="true">TV</span><span>快速记录</span></div>
+      <div class="quick-hint"><span>保存后进入记录区</span><span><kbd>Enter</kbd> 保存</span><span><kbd>Shift + Enter</kbd> 换行</span><span><kbd>Esc</kbd> 隐藏</span></div>
+    </div>
+    <label class="sr-only" for="task-input">记录内容</label>
+    <textarea id="task-input" placeholder="记下任务、需求或想法，也可以粘贴截图…" aria-describedby="input-help"></textarea>
+    <div id="input-help" class="input-help">截图会交给已选择的 AI 服务提取待办，原始记录会保留在记录区。</div>
     <div id="img-preview" class="img-preview hidden">
       <img id="img-thumb" alt="待解析截图" />
-      <button id="btn-remove-img" title="移除图片">×</button>
-      <span class="img-tip">截图将交给 AI 提取待办</span>
+      <button id="btn-remove-img" type="button" title="移除图片">移除</button>
+      <span class="img-tip">已附加图片 · 保存后解析</span>
     </div>
     <div class="actions">
-      <span id="status"></span>
-      <button id="btn-save" class="btn primary">保存 (Enter)</button>
-      <button id="btn-cancel" class="btn">隐藏 (Esc)</button>
+      <span id="status" role="status" aria-live="polite"></span>
+      <button id="btn-cancel" class="btn" type="button">隐藏</button>
+      <button id="btn-save" class="btn primary" type="button">保存记录</button>
     </div>
-  </div>
+  </main>
   <script src="quick.js"></script>
 </body>
 </html>

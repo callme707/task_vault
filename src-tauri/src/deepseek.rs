@@ -14,8 +14,16 @@ pub enum AiError {
     Network(#[from] reqwest::Error),
     #[error("API 返回异常: {0}")]
     Api(String),
+    #[error("AI 服务返回 HTTP {0}，请检查服务配置或稍后重试")]
+    Http(u16),
     #[error("返回内容不是合法 JSON: {0}")]
     BadJson(#[from] serde_json::Error),
+}
+
+impl AiError {
+    pub fn retryable(&self) -> bool {
+        matches!(self, Self::Network(_) | Self::Http(408 | 429 | 500..=599))
+    }
 }
 
 /// 随记录提交给视觉模型的一张图片。
@@ -114,7 +122,9 @@ const IMAGE_SYSTEM_PROMPT: &str = r#"你的回复会被程序直接解析，硬�
 识别要求：图中每个独立待办各占一项，聊天记录里不同人认领的事拆开；不要遗漏、不要臆造；没有可行动内容时 items 返回空数组。"#;
 
 fn now_line() -> String {
-    Local::now().format("当前时间：%Y-%m-%d %H:%M:%S %A").to_string()
+    Local::now()
+        .format("当前时间：%Y-%m-%d %H:%M:%S %A")
+        .to_string()
 }
 
 fn user_prompt(raw_text: &str) -> String {
@@ -140,7 +150,10 @@ pub async fn parse_inbox_text(
     raw_text: &str,
     image: Option<&ImageInput>,
 ) -> Result<AiParsed, AiError> {
-    let api_key = settings.effective_api_key().ok_or(AiError::NoApiKey)?;
+    if !settings.api_ready() {
+        return Err(AiError::NoApiKey);
+    }
+    let api_key = settings.effective_api_key().unwrap_or_default();
     if settings.provider() == PROVIDER_ANTHROPIC {
         parse_with_anthropic(client, settings, &api_key, raw_text, image).await
     } else {
@@ -158,7 +171,11 @@ async fn parse_with_openai(
     image: Option<&ImageInput>,
 ) -> Result<AiParsed, AiError> {
     let with_image = image.is_some();
-    let system = if with_image { IMAGE_SYSTEM_PROMPT } else { SYSTEM_PROMPT };
+    let system = if with_image {
+        IMAGE_SYSTEM_PROMPT
+    } else {
+        SYSTEM_PROMPT
+    };
     let user_content = match image {
         Some(img) => json!([
             {"type": "text", "text": image_user_prompt(raw_text)},
@@ -192,21 +209,26 @@ async fn parse_with_openai(
     }
 
     let url = format!("{}/chat/completions", settings.normalized_base_url());
-    let resp = client
-        .post(&url)
-        .bearer_auth(api_key)
-        .json(&body)
-        .send()
-        .await?;
+    let mut request = client.post(&url).json(&body);
+    if !api_key.is_empty() {
+        request = request.bearer_auth(api_key);
+    }
+    let resp = request.send().await?;
 
     let text = check_status(resp).await?;
     let value: Value = serde_json::from_str(&text)?;
     let content = value
         .pointer("/choices/0/message/content")
         .and_then(Value::as_str)
-        .ok_or_else(|| AiError::Api(format!("返回结构不符合预期: {text}")))?;
+        .ok_or_else(|| AiError::Api("返回结构不符合预期，缺少文本结果".into()))?;
     match parse_content_json(content) {
-        Ok(p) => Ok(p),
+        Ok(mut p) => {
+            p.partial |= value
+                .pointer("/choices/0/finish_reason")
+                .and_then(Value::as_str)
+                == Some("length");
+            Ok(p)
+        }
         // 附上响应元数据便于定位截断原因：finish_reason 与 token 用量
         Err(e) => Err(AiError::Api(format!("{e}｜{}", usage_line(&value)))),
     }
@@ -221,7 +243,11 @@ async fn parse_with_anthropic(
     image: Option<&ImageInput>,
 ) -> Result<AiParsed, AiError> {
     let with_image = image.is_some();
-    let system = if with_image { IMAGE_SYSTEM_PROMPT } else { SYSTEM_PROMPT };
+    let system = if with_image {
+        IMAGE_SYSTEM_PROMPT
+    } else {
+        SYSTEM_PROMPT
+    };
     let user_content = match image {
         Some(img) => json!([
             {"type": "image", "source": {"type": "base64", "media_type": img.mime, "data": img.data}},
@@ -258,11 +284,18 @@ async fn parse_with_anthropic(
                 .find(|b| b.get("type").and_then(Value::as_str) == Some("text"))
                 .and_then(|b| b.get("text").and_then(Value::as_str))
         })
-        .ok_or_else(|| AiError::Api(format!("返回结构不符合预期: {text}")))?;
+        .ok_or_else(|| AiError::Api("返回结构不符合预期，缺少文本结果".into()))?;
     match parse_content_json(content) {
-        Ok(p) => Ok(p),
+        Ok(mut p) => {
+            p.partial |=
+                value.pointer("/stop_reason").and_then(Value::as_str) == Some("max_tokens");
+            Ok(p)
+        }
         Err(e) => {
-            let stop = value.pointer("/stop_reason").and_then(Value::as_str).unwrap_or("-");
+            let stop = value
+                .pointer("/stop_reason")
+                .and_then(Value::as_str)
+                .unwrap_or("-");
             Err(AiError::Api(format!("{e}｜stop_reason={stop}")))
         }
     }
@@ -270,11 +303,11 @@ async fn parse_with_anthropic(
 
 async fn check_status(resp: reqwest::Response) -> Result<String, AiError> {
     let status = resp.status();
-    let text = resp.text().await?;
     if !status.is_success() {
-        return Err(AiError::Api(format!("HTTP {status}: {text}")));
+        // Error bodies can contain reflected request content or credentials.
+        return Err(AiError::Http(status.as_u16()));
     }
-    Ok(text)
+    Ok(resp.text().await?)
 }
 
 /// 提取响应中的截断诊断信息：finish_reason 与 token 用量（含推理 token）。
@@ -290,7 +323,9 @@ fn usage_line(value: &Value) -> String {
     let reasoning = value
         .pointer("/usage/completion_tokens_details/reasoning_tokens")
         .and_then(Value::as_i64);
-    let prompt = value.pointer("/usage/prompt_tokens").and_then(Value::as_i64);
+    let prompt = value
+        .pointer("/usage/prompt_tokens")
+        .and_then(Value::as_i64);
     format!(
         "finish_reason={finish}, completion={:?} (reasoning={:?}), prompt={:?}",
         completion, reasoning, prompt
@@ -384,7 +419,8 @@ fn parse_content_json(content: &str) -> Result<AiParsed, AiError> {
     let stripped = strip_reasoning(content);
     if stripped.trim().is_empty() {
         return Err(AiError::Api(
-            "模型只输出了思考过程就被截断（推理耗尽了输出预算），请在设置中更换为非推理型视觉模型".into(),
+            "模型只输出了思考过程就被截断（推理耗尽了输出预算），请在设置中更换为非推理型视觉模型"
+                .into(),
         ));
     }
     let trimmed = stripped
@@ -395,29 +431,40 @@ fn parse_content_json(content: &str) -> Result<AiParsed, AiError> {
         .trim();
 
     if let Ok(p) = serde_json::from_str::<AiParsed>(trimmed) {
-        return Ok(p);
+        return validate_parsed(p);
     }
     if let (Some(start), Some(end)) = (trimmed.find('{'), trimmed.rfind('}')) {
         if end > start {
             if let Ok(p) = serde_json::from_str::<AiParsed>(&trimmed[start..=end]) {
-                return Ok(p);
+                return validate_parsed(p);
             }
         }
     }
     // 输出被中途掐断时救回已完成的待办
     if let Some(start) = trimmed.find('{') {
-        if let Some(p) = salvage_json(&trimmed[start..]) {
-            return Ok(p);
+        if let Some(mut p) = salvage_json(&trimmed[start..]) {
+            p.partial = true;
+            return validate_parsed(p);
         }
     }
 
-    let preview: String = content.chars().take(200).collect();
     if !stripped.trim_end().ends_with('}') {
-        return Err(AiError::Api(format!(
-            "输出被截断（未正常结束），该服务商疑似忽略了 max_tokens 参数或另有输出上限，建议更换视觉模型验证。收到的内容：{preview}"
-        )));
+        return Err(AiError::Api(
+            "输出未正常结束，可能被截断，无法恢复完整结果，请重试或更换模型。".into(),
+        ));
     }
-    Err(AiError::Api(format!("返回内容不是合法 JSON: {preview}")))
+    Err(AiError::Api("AI 返回内容不是合法 JSON，请重新解析".into()))
+}
+
+fn validate_parsed(parsed: AiParsed) -> Result<AiParsed, AiError> {
+    if parsed.title.trim().is_empty()
+        && parsed.description.trim().is_empty()
+        && parsed.summary.trim().is_empty()
+        && parsed.items.is_empty()
+    {
+        return Err(AiError::Api("AI 返回了空结果，请重新解析".into()));
+    }
+    Ok(parsed)
 }
 
 #[cfg(test)]
@@ -431,10 +478,8 @@ mod tests {
         assert!(p.items.is_empty());
 
         // 图片模式的多待办包装结构
-        let p = parse_content_json(
-            r#"{"items":[{"title":"t1"},{"title":"t2"}],"summary":"s"}"#,
-        )
-        .unwrap();
+        let p = parse_content_json(r#"{"items":[{"title":"t1"},{"title":"t2"}],"summary":"s"}"#)
+            .unwrap();
         assert_eq!(p.items.len(), 2);
         assert_eq!(p.items[1].title, "t2");
 
@@ -450,8 +495,9 @@ mod tests {
     #[test]
     fn strips_inline_reasoning() {
         // vLLM 混排思维链：取 </think> 之后的内容
-        let p = parse_content_json("<think>我先分析一下 {图片} 里的内容...</think>{\"title\":\"d\"}")
-            .unwrap();
+        let p =
+            parse_content_json("<think>我先分析一下 {图片} 里的内容...</think>{\"title\":\"d\"}")
+                .unwrap();
         assert_eq!(p.title, "d");
         // 只有未闭合的 <think>：判定为只有推理
         assert!(parse_content_json("<think>推理中...被截断").is_err());
@@ -464,6 +510,7 @@ mod tests {
         let p = parse_content_json(s).unwrap();
         assert_eq!(p.items.len(), 1);
         assert_eq!(p.items[0].title, "a");
+        assert!(p.partial);
 
         // 断在字符串值中间
         let s = r#"{"items":[{"title":"a","deadline":"2026-09"#;
@@ -493,7 +540,96 @@ mod tests {
         assert_eq!(sniff_image_mime(&jpeg), Some("image/jpeg"));
 
         // 超过上限快速失败
-        let big = vec![0x89u8, b'P', b'N', b'G'].into_iter().chain(std::iter::repeat(0u8)).take(MAX_IMAGE_BYTES + 1).collect::<Vec<_>>();
+        let big = vec![0x89u8, b'P', b'N', b'G']
+            .into_iter()
+            .chain(std::iter::repeat(0u8))
+            .take(MAX_IMAGE_BYTES + 1)
+            .collect::<Vec<_>>();
         assert!(encode_image(&big).is_err());
+    }
+
+    #[test]
+    fn empty_model_objects_are_not_success() {
+        assert!(parse_content_json("{}").is_err());
+        assert!(parse_content_json(r#"{"unrecognized":"value"}"#).is_err());
+        let error = parse_content_json("private-provider-response")
+            .unwrap_err()
+            .to_string();
+        assert!(!error.contains("private-provider-response"));
+    }
+
+    fn fixture_server(status: &str, body: &str) -> (String, std::thread::JoinHandle<String>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = format!("http://{}", listener.local_addr().unwrap());
+        let response = format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+        let worker = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            loop {
+                let mut buffer = [0; 4096];
+                let n = stream.read(&mut buffer).unwrap();
+                if n == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..n]);
+                if let Some(end) = request.windows(4).position(|v| v == b"\r\n\r\n") {
+                    let header = String::from_utf8_lossy(&request[..end]);
+                    let length = header
+                        .lines()
+                        .find_map(|line| {
+                            let (key, value) = line.split_once(':')?;
+                            key.eq_ignore_ascii_case("content-length")
+                                .then(|| value.trim().parse::<usize>().unwrap())
+                        })
+                        .unwrap_or(0);
+                    if request.len() >= end + 4 + length {
+                        break;
+                    }
+                }
+            }
+            stream.write_all(response.as_bytes()).unwrap();
+            String::from_utf8(request).unwrap()
+        });
+        (address, worker)
+    }
+
+    #[tokio::test]
+    async fn provider_truncation_marks_valid_json_as_partial() {
+        let body = serde_json::json!({"choices":[{"message":{"content":"{\"title\":\"截断待办\"}"},"finish_reason":"length"}]}).to_string();
+        let (base_url, server) = fixture_server("200 OK", &body);
+        let settings = Settings {
+            base_url,
+            api_key: "fixture-key".into(),
+            ..Settings::default()
+        };
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let result = parse_inbox_text(&client, &settings, "合成测试记录", None)
+            .await
+            .unwrap();
+        assert!(result.partial);
+        let request = server.join().unwrap();
+        assert!(request.starts_with("POST /chat/completions"));
+        assert!(request.contains("合成测试记录"));
+    }
+
+    #[tokio::test]
+    async fn provider_error_does_not_store_the_response_body() {
+        let (base_url, server) = fixture_server("401 Unauthorized", "fixture-private-response");
+        let settings = Settings {
+            base_url,
+            api_key: "fixture-key".into(),
+            ..Settings::default()
+        };
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let error = parse_inbox_text(&client, &settings, "合成测试记录", None)
+            .await
+            .unwrap_err();
+        assert!(matches!(error, AiError::Http(401)));
+        assert!(!error.to_string().contains("fixture-private-response"));
+        server.join().unwrap();
     }
 }

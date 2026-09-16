@@ -1,8 +1,11 @@
+mod ai_queue;
+mod attachments;
 mod commands;
 mod db;
 mod deepseek;
 mod models;
 mod settings;
+mod storage;
 
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
@@ -21,6 +24,7 @@ pub struct AppState {
     pub settings_path: PathBuf,
     pub settings: Arc<RwLock<Settings>>,
     pub http: reqwest::Client,
+    pub ai_queue: ai_queue::AiQueue,
 }
 
 fn toggle_window(app: &AppHandle, label: &str) {
@@ -130,25 +134,28 @@ pub fn run() {
         .setup(move |app| {
             tracing_subscriber::fmt().with_env_filter("info").init();
 
-            let app_data = app.path().app_data_dir().expect("无法获取应用数据目录");
-            std::fs::create_dir_all(&app_data).expect("无法创建应用数据目录");
+            let app_data = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&app_data)?;
 
             let settings_path = app_data.join("settings.json");
-            let settings = Settings::load_or_create(&settings_path).expect("无法加载设置");
+            let settings =
+                Settings::load_or_create(&settings_path).map_err(std::io::Error::other)?;
             let http = reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(60))
-                .build()
-                .expect("无法创建 HTTP 客户端");
+                .redirect(reqwest::redirect::Policy::none())
+                .build()?;
 
             let db = Db::open(&app_data.join("inbox.db"), &app_data.join("tasks.db"))
-                .expect("无法打开数据库");
+                .map_err(std::io::Error::other)?;
+            attachments::migrate_legacy(&app_data.join("attachments"))
+                .map_err(std::io::Error::other)?;
 
             // 使用设置中的快捷键（保存设置后也会重新注册）。
             register_hotkeys(app.handle(), &settings);
 
             // 开机自启：按设置启用/禁用。
             if settings.autostart {
-                app.autolaunch().enable().expect("无法启用开机自启");
+                app.autolaunch().enable()?;
             } else {
                 let _ = app.autolaunch().disable();
             }
@@ -160,7 +167,10 @@ pub fn run() {
                 settings_path,
                 settings: Arc::new(RwLock::new(settings)),
                 http,
+                ai_queue: ai_queue::AiQueue::new(),
             });
+
+            ai_queue::resume_pending(app.handle()).map_err(std::io::Error::other)?;
 
             if !hidden_start {
                 show_main(app.handle());
@@ -202,11 +212,41 @@ pub fn run() {
             commands::hide_window,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building tauri application");
+        .unwrap_or_else(|error| {
+            show_startup_error(&error.to_string());
+            std::process::exit(1);
+        });
 
     app.run(|_app, event| {
         if let RunEvent::Exit = event {
             tracing::info!("应用退出");
         }
     });
+}
+
+fn show_startup_error(message: &str) {
+    let message =
+        format!("TaskVault 无法启动。为保护数据，应用没有重置配置或清空记录。\n\n{message}");
+    eprintln!("{message}");
+    #[cfg(windows)]
+    {
+        #[link(name = "user32")]
+        extern "system" {
+            fn MessageBoxW(
+                hwnd: *mut std::ffi::c_void,
+                text: *const u16,
+                caption: *const u16,
+                flags: u32,
+            ) -> i32;
+        }
+        let text: Vec<u16> = message.encode_utf16().chain(Some(0)).collect();
+        let caption: Vec<u16> = "TaskVault · 数据保护"
+            .encode_utf16()
+            .chain(Some(0))
+            .collect();
+        // Both nul-terminated UTF-16 buffers outlive the synchronous system call.
+        unsafe {
+            MessageBoxW(std::ptr::null_mut(), text.as_ptr(), caption.as_ptr(), 0x10);
+        }
+    }
 }

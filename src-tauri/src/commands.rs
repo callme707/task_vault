@@ -1,17 +1,14 @@
 use std::path::Path;
 
-use base64::engine::general_purpose::STANDARD as B64;
-use base64::Engine as _;
-use chrono::Local;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
-use crate::deepseek::{self, encode_image, AiError};
+use crate::attachments;
+use crate::deepseek::encode_image;
 use crate::models::{InboxItem, Subtask, Task, TaskDraft};
-use crate::settings::Settings;
+use crate::settings::{SettingsUpdate, SettingsView};
 use crate::AppState;
 
-/// 附件目录：app_data/attachments
 fn attachments_dir(state: &State<'_, AppState>) -> std::path::PathBuf {
     state
         .settings_path
@@ -20,64 +17,22 @@ fn attachments_dir(state: &State<'_, AppState>) -> std::path::PathBuf {
         .join("attachments")
 }
 
-/// 录入后的 AI 解析调度：按设置决定自动解析 / 未配置 / 跳过，异步执行不阻塞录入。
 fn trigger_parse(app: &AppHandle, state: &State<'_, AppState>, id: i64) {
-    // 录入即通知前端刷新，让“待解析”条目立刻出现在列表里，而不是等 AI 跑完
-    let _ = app.emit("inbox-updated", id);
-
-    let settings = match state.settings.read() {
-        Ok(s) => s.clone(),
-        Err(_) => return,
-    };
-    if settings.auto_parse {
-        if settings.effective_api_key().is_some() {
-            let handle = app.clone();
-            let db = state.db.clone();
-            let http = state.http.clone();
-            let attachments_dir = attachments_dir(state);
-            tauri::async_runtime::spawn(async move {
-                let _ = parse_inbox_with_retry(&db, &http, &settings, &attachments_dir, id).await;
-                let _ = handle.emit("inbox-updated", id);
-            });
+    let result = (|| -> Result<(), String> {
+        let settings = state.settings.read().map_err(|_| "设置读取失败")?.clone();
+        if !settings.auto_parse {
+            state.db.set_ai_result(id, "skipped", None, None)?;
+        } else if !settings.api_ready() {
+            state.db.set_ai_result(id, "unconfigured", None, None)?;
         } else {
-            let _ = state.db.set_ai_result(id, "unconfigured", None, None);
-            let _ = app.emit("inbox-updated", id);
+            state.ai_queue.enqueue(app, id, true)?;
         }
-    } else {
-        let _ = state.db.set_ai_result(id, "skipped", None, None);
-        let _ = app.emit("inbox-updated", id);
+        Ok(())
+    })();
+    if let Err(message) = result {
+        let _ = app.emit("operation-error", serde_json::json!({"id":id,"message":format!("记录已保存，启动 AI 解析失败：{message}")}));
     }
-}
-
-fn save_attachment(
-    dir: &Path,
-    bytes: &[u8],
-) -> Result<String, String> {
-    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let ext = match deepseek::sniff_image_mime(bytes) {
-        Some("image/png") => "png",
-        Some("image/jpeg") => "jpg",
-        Some("image/webp") => "webp",
-        Some("image/gif") => "gif",
-        _ => return Err("不支持的图片格式（仅支持 PNG/JPEG/WebP/GIF）".to_string()),
-    };
-    let name = format!("img_{}.{}", Local::now().format("%Y%m%d_%H%M%S%3f"), ext);
-    std::fs::write(dir.join(&name), bytes).map_err(|e| e.to_string())?;
-    Ok(name)
-}
-
-/// 剥离 data URL 前缀，返回纯 base64
-fn strip_data_url(data: &str) -> Result<&str, String> {
-    match data.find(";base64,") {
-        Some(i) => Ok(&data[i + 8..]),
-        None => {
-            if data.contains("base64") || data.starts_with('/') || data.starts_with('i') {
-                Ok(data)
-            } else {
-                Err("图片数据格式不正确".to_string())
-            }
-        }
-    }
+    let _ = app.emit("inbox-updated", id);
 }
 
 #[tauri::command]
@@ -87,43 +42,44 @@ pub async fn capture_inbox_image(
     text: Option<String>,
     image_base64: String,
 ) -> Result<InboxItem, String> {
-    let raw_b64 = strip_data_url(&image_base64)?;
-    let bytes = B64.decode(raw_b64.trim())
-        .map_err(|e| format!("图片解码失败: {e}"))?;
-    let name = save_attachment(&attachments_dir(&state), &bytes)?;
-
+    // Validate before writing either attachment or record.
+    let bytes = attachments::decode_capture(&image_base64)?;
+    let name = attachments::save(&attachments_dir(&state), &bytes)?;
     let raw = text.unwrap_or_default().trim().to_string();
     let item = state.db.insert_inbox(&raw, "image", Some(&name))?;
     trigger_parse(&app, &state, item.id);
-    Ok(state.db.get_inbox(item.id)?)
+    state.db.get_inbox(item.id)
 }
 
-/// 详情页展示图片：返回 data URL（省去 asset 协议/CSP 配置）
 #[tauri::command]
-pub fn read_inbox_image(
-    state: State<'_, AppState>,
-    id: i64,
-) -> Result<Option<String>, String> {
+pub fn read_inbox_image(state: State<'_, AppState>, id: i64) -> Result<Option<String>, String> {
     let item = state.db.get_inbox(id)?;
-    let Some(rel) = item.image_path else {
+    if item.deleted_at.is_some() {
+        return Err("记录已删除".into());
+    }
+    let Some(name) = item.image_path else {
         return Ok(None);
     };
-    let bytes = std::fs::read(attachments_dir(&state).join(rel))
-        .map_err(|e| format!("读取图片失败: {e}"))?;
+    let bytes = attachments::read(&attachments_dir(&state), &name)?;
     let img = encode_image(&bytes).map_err(|e| e.to_string())?;
     Ok(Some(format!("data:{};base64,{}", img.mime, img.data)))
 }
 
-/// 快速窗拖拽图片文件时取预览用：读取磁盘图片转 data URL（仅限图片扩展名）
 #[tauri::command]
 pub fn read_image_file_base64(path: String) -> Result<String, String> {
-    let ext_ok = ["png", "jpg", "jpeg", "webp", "gif"]
-        .iter()
-        .any(|e| path.rsplit('.').next().is_some_and(|x| x.eq_ignore_ascii_case(e)));
-    if !ext_ok {
-        return Err("仅支持 PNG/JPEG/WebP/GIF 图片".to_string());
+    let extension = Path::new(&path)
+        .extension()
+        .and_then(|v| v.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "webp" | "gif") {
+        return Err("仅支持 PNG/JPEG/WebP/GIF 图片".into());
     }
-    let bytes = std::fs::read(&path).map_err(|e| format!("读取文件失败: {e}"))?;
+    let metadata = std::fs::metadata(&path).map_err(|_| "无法读取图片文件")?;
+    if !metadata.is_file() || metadata.len() > crate::deepseek::MAX_IMAGE_BYTES as u64 {
+        return Err("请选择不超过 4 MB 的图片文件".into());
+    }
+    let bytes = std::fs::read(path).map_err(|_| "无法读取图片文件")?;
     let img = encode_image(&bytes).map_err(|e| e.to_string())?;
     Ok(format!("data:{};base64,{}", img.mime, img.data))
 }
@@ -137,14 +93,13 @@ pub async fn capture_inbox(
 ) -> Result<InboxItem, String> {
     let raw = text.trim();
     if raw.is_empty() {
-        return Err("内容不能为空".to_string());
+        return Err("内容不能为空".into());
     }
-
     let item = state
         .db
         .insert_inbox(raw, source.as_deref().unwrap_or("hotkey"), None)?;
     trigger_parse(&app, &state, item.id);
-    Ok(state.db.get_inbox(item.id)?)
+    state.db.get_inbox(item.id)
 }
 
 #[tauri::command]
@@ -159,98 +114,17 @@ pub fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
 
 #[tauri::command]
 pub fn parse_inbox_item(app: AppHandle, state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    let item = state.db.get_inbox(id)?;
-    let settings = state.settings.read().map_err(|e| e.to_string())?.clone();
-    let Some(_api_key) = settings.effective_api_key() else {
-        state.db.set_ai_result(id, "unconfigured", None, None)?;
-        let _ = app.emit("inbox-updated", id);
-        return Err("未配置 API Key，请先在设置中填写".to_string());
-    };
-
-    let db = state.db.clone();
-    let http = state.http.clone();
-    let task_settings = settings.clone();
-    let attachments_dir = attachments_dir(&state);
-    tauri::async_runtime::spawn(async move {
-        let _ = parse_inbox_with_retry(&db, &http, &task_settings, &attachments_dir, item.id).await;
-        let _ = app.emit("inbox-updated", item.id);
-    });
+    state.ai_queue.enqueue(&app, id, true)?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn process_pending_inbox(app: AppHandle, state: State<'_, AppState>) -> Result<usize, String> {
-    let ids = state.db.pending_ai_ids()?;
-    if ids.is_empty() {
-        return Ok(0);
+    let mut started = 0;
+    for id in state.db.pending_ai_ids()? {
+        started += usize::from(state.ai_queue.enqueue(&app, id, true)?);
     }
-
-    let settings = state.settings.read().map_err(|e| e.to_string())?.clone();
-    if settings.effective_api_key().is_none() {
-        return Err("未配置 API Key，请先在设置中填写".to_string());
-    }
-
-    for id in &ids {
-        let db = state.db.clone();
-        let http = state.http.clone();
-        let task_settings = settings.clone();
-        let attachments_dir = attachments_dir(&state);
-        let handle = app.clone();
-        let item_id = *id;
-        tauri::async_runtime::spawn(async move {
-            let _ =
-                parse_inbox_with_retry(&db, &http, &task_settings, &attachments_dir, item_id).await;
-            let _ = handle.emit("inbox-updated", item_id);
-        });
-    }
-    Ok(ids.len())
-}
-
-async fn parse_inbox_with_retry(
-    db: &crate::db::Db,
-    http: &reqwest::Client,
-    settings: &Settings,
-    attachments_dir: &Path,
-    id: i64,
-) -> Result<(), AiError> {
-    let item = match db.get_inbox(id) {
-        Ok(item) => item,
-        Err(_) => return Err(AiError::Api("记录不存在".to_string())),
-    };
-    // 带图片的记录走视觉模型；附件丢失直接失败并说明原因
-    let image = match &item.image_path {
-        Some(rel) => Some(encode_image(
-            &std::fs::read(attachments_dir.join(rel))
-                .map_err(|e| AiError::Api(format!("图片附件读取失败: {e}")))?,
-        )?),
-        None => None,
-    };
-
-    db.set_ai_processing(id).ok();
-
-    let model_used = settings.model_for(image.is_some()).to_string();
-    let mut last_err = AiError::Api("unknown".to_string());
-    for attempt in 0..3 {
-        match deepseek::parse_inbox_text(http, settings, &item.raw_text, image.as_ref()).await {
-            Ok(parsed) => {
-                // 一张图片只对应一条收件箱记录：多待办整体存在 ai_result 里，
-                // 由前端详情页展示并在转正时选择，避免拆分产生重复记录
-                let json = serde_json::to_string(&parsed).unwrap_or_else(|_| "{}".to_string());
-                let _ = db.set_ai_result(id, "done", Some(&json), Some(&model_used));
-                return Ok(());
-            }
-            Err(e) => {
-                last_err = e;
-                if attempt < 2 {
-                    tokio::time::sleep(std::time::Duration::from_secs(1 + attempt)).await;
-                }
-            }
-        }
-    }
-
-    let msg = last_err.to_string();
-    let _ = db.set_ai_result(id, "failed", Some(&msg), Some(&model_used));
-    Err(last_err)
+    Ok(started)
 }
 
 #[tauri::command]
@@ -259,20 +133,9 @@ pub fn promote_inbox(
     state: State<'_, AppState>,
     inbox_id: i64,
     draft: TaskDraft,
+    item_key: String,
 ) -> Result<Task, String> {
-    let item = state.db.get_inbox(inbox_id)?;
-    if item.deleted_at.is_some() {
-        return Err("该记录已删除".to_string());
-    }
-    if draft.title.trim().is_empty() {
-        return Err("任务标题不能为空".to_string());
-    }
-
-    let task = state
-        .db
-        .create_task(&draft, Some(inbox_id), Some(&item.raw_text))?;
-    state.db.mark_promoted(inbox_id)?;
-
+    let task = state.db.promote_inbox(inbox_id, &draft, &item_key)?;
     let _ = app.emit("inbox-updated", inbox_id);
     let _ = app.emit("tasks-updated", ());
     Ok(task)
@@ -376,45 +239,43 @@ pub fn delete_inbox(app: AppHandle, state: State<'_, AppState>, id: i64) -> Resu
 }
 
 #[tauri::command]
-pub fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
+pub fn get_settings(state: State<'_, AppState>) -> Result<SettingsView, String> {
     state
         .settings
         .read()
-        .map(|s| s.clone())
-        .map_err(|e| e.to_string())
+        .map(|s| s.view())
+        .map_err(|_| "设置读取失败".into())
 }
 
 #[tauri::command]
 pub fn save_settings(
     app: AppHandle,
     state: State<'_, AppState>,
-    settings: Settings,
-) -> Result<Settings, String> {
-    {
-        let mut guard = state.settings.write().map_err(|e| e.to_string())?;
-        *guard = settings.clone();
-    }
-    settings.save(&state.settings_path)?;
-    crate::register_hotkeys(&app, &settings);
-
-    if settings.autostart {
+    settings: SettingsUpdate,
+) -> Result<SettingsView, String> {
+    let saved = {
+        let mut guard = state.settings.write().map_err(|_| "设置读取失败")?;
+        let next = settings.merge(&guard)?;
+        next.save(&state.settings_path)?;
+        *guard = next.clone();
+        next
+    };
+    crate::register_hotkeys(&app, &saved);
+    if saved.autostart {
         app.autolaunch()
             .enable()
-            // 走到这里时设置已落盘，报错也要说明“保存成功，只是自启没开起来”
             .map_err(|e| format!("设置已保存，但启用开机自启失败：{e}"))?;
     } else if let Err(e) = app.autolaunch().disable() {
-        // Windows 下自启项本就不存在时 disable 会报 os error 2，此时已是关闭状态，不算失败
         tracing::warn!("关闭开机自启失败（可能本就未启用）: {e}");
     }
-    Ok(settings)
+    crate::ai_queue::resume_pending(&app)?;
+    Ok(saved.view())
 }
 
 #[tauri::command]
 pub fn hide_window(app: AppHandle, label: String) -> Result<(), String> {
-    if let Some(win) = app.get_webview_window(&label) {
-        let _ = win.hide();
-        Ok(())
-    } else {
-        Err(format!("窗口不存在: {label}"))
-    }
+    let win = app
+        .get_webview_window(&label)
+        .ok_or_else(|| format!("窗口不存在: {label}"))?;
+    win.hide().map_err(|e| e.to_string())
 }
