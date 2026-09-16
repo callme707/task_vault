@@ -18,6 +18,9 @@
         "minHeight": 620,
         "visible": false,
         "center": true,
+        "decorations": false,
+        "theme": "dark",
+        "backgroundColor": "#191a20",
         "url": "index.html"
       },
       {
@@ -32,11 +35,12 @@
         "skipTaskbar": true,
         "resizable": false,
         "focus": false,
+        "backgroundColor": "#191a20",
         "url": "quick.html"
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-src 'none'"
     }
   },
   "bundle": {

@@ -3,104 +3,202 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>任务记录 · 工作台</title>
+  <title>TaskVault · 工作台</title>
   <link rel="stylesheet" href="main.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="logo">✓</span>
-      <span class="name">TaskVault</span>
-      <span class="tag">任务工作台</span>
+  <header id="titlebar" class="titlebar" aria-label="窗口栏">
+    <div id="titlebar-drag" class="titlebar-drag">
+      <span class="icon icon-layers" aria-hidden="true"></span><span>TaskVault</span>
     </div>
-    <div class="actions">
-      <button id="btn-process-pending" class="btn ghost">AI 整理待处理</button>
-      <button id="btn-refresh" class="btn ghost">刷新</button>
-      <button id="btn-settings" class="btn ghost">设置</button>
+    <div class="window-controls">
+      <button id="win-minimize" class="window-control" type="button" aria-label="最小化" title="最小化"><span class="icon icon-minus" aria-hidden="true"></span></button>
+      <button id="win-maximize" class="window-control" type="button" aria-label="最大化" title="最大化"><span class="icon icon-square" aria-hidden="true"></span></button>
+      <button id="win-close" class="window-control window-close" type="button" aria-label="关闭到托盘" title="关闭到托盘"><span class="icon icon-x" aria-hidden="true"></span></button>
     </div>
   </header>
-
-  <main class="workspace">
-    <section class="panel inbox-panel">
-      <div class="panel-head">
-        <h2>临时库 · 收件箱</h2>
-        <span id="inbox-count" class="count"></span>
-      </div>
-      <div id="inbox-list" class="list"></div>
-    </section>
-
-    <section class="panel detail-panel">
-      <div class="panel-head"><h2>记录详情 / 转正草稿</h2></div>
-      <div id="detail-empty" class="empty">在左侧选择一条临时记录</div>
-      <div id="detail-content" class="detail hidden">
-        <div id="detail-image" class="detail-image hidden">
-          <div class="block-title">附图</div>
-          <img id="detail-img" alt="记录截图" />
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="sidebar-brand">
+        <div>
+          <div class="brand-name">个人工作区</div>
+          <div class="brand-caption">记录、整理与推进</div>
         </div>
-        <div class="raw-block">
-          <div class="block-title">原始记录（永不删除）</div>
-          <pre id="raw-text"></pre>
-          <div class="ai-line">
-            <span id="ai-status" class="badge"></span>
-            <span id="ai-model"></span>
-            <button id="btn-reparse" class="btn small">重新解析</button>
+      </div>
+
+      <div class="sidebar-section-label">工作空间</div>
+      <nav class="nav-list">
+        <button class="nav-item active" data-view="inbox" type="button">
+          <span class="icon icon-inbox" aria-hidden="true"></span>
+          <span class="nav-label">记录区</span>
+          <span id="nav-inbox-count" class="nav-count">0</span>
+        </button>
+        <button class="nav-item" data-view="tasks" type="button">
+          <span class="icon icon-list-todo" aria-hidden="true"></span>
+          <span class="nav-label">正式任务</span>
+          <span id="nav-task-count" class="nav-count">0</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-shortcuts"><span>快速记录</span><kbd>Ctrl Alt Q</kbd><span>打开工作区</span><kbd>Ctrl Alt W</kbd></div>
+      <div class="sidebar-footnote">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>本地工作区</span>
+      </div>
+      <button id="btn-settings" class="nav-item nav-settings" type="button">
+        <span class="icon icon-settings-2" aria-hidden="true"></span>
+        <span class="nav-label">设置</span>
+      </button>
+    </aside>
+
+    <main class="app-main">
+      <header class="topbar">
+        <div class="page-heading">
+          <div class="eyebrow"><span id="page-kicker">RECORDS</span></div>
+          <h1 id="page-title">记录区</h1>
+          <p id="page-subtitle">先收集，再确认。AI 建议会保留在原始记录旁。</p>
+        </div>
+        <div class="topbar-actions">
+          <button id="btn-process-pending" class="btn primary" type="button">整理待处理</button>
+          <button id="btn-refresh" class="btn ghost" type="button">刷新</button>
+        </div>
+      </header>
+
+      <section id="view-inbox" class="view active" aria-labelledby="page-title">
+        <div class="view-toolbar">
+          <div>
+            <p><span id="inbox-count">0 条记录</span><span class="toolbar-separator">·</span>原始内容会一直保留</p>
           </div>
+          <div class="toolbar-hint"><kbd>Ctrl</kbd><span>+</span><kbd>Alt</kbd><span>+</span><kbd>Q</kbd><span>快速记录</span></div>
         </div>
-        <div class="block-title">AI 解析结果</div>
-        <div id="ai-summary" class="ai-summary"></div>
-        <div class="block-title">转正草稿（可修改）</div>
-        <label class="full hidden" id="f-item-wrap">待办选择
-          <select id="f-item"></select>
-        </label>
-        <div class="form-grid">
-          <label>标题 <input id="f-title" /></label>
-          <label>类型
-            <select id="f-kind"><option value="task">任务</option><option value="requirement">需求</option><option value="idea">想法</option><option value="note">记录</option></select>
-          </label>
-          <label>优先级
-            <select id="f-priority"><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
-          </label>
-          <label>状态
-            <select id="f-status"><option value="todo">待办</option><option value="in_progress">进行中</option><option value="blocked">阻塞</option><option value="done">完成</option></select>
-          </label>
-          <label>截止时间 <input id="f-due" type="datetime-local" /></label>
-          <label>预估工时(分钟) <input id="f-estimate" type="number" min="0" /></label>
-          <label>计划开始 <input id="f-start" type="datetime-local" /></label>
-          <label>计划结束 <input id="f-end" type="datetime-local" /></label>
-        </div>
-        <label class="full">描述 <textarea id="f-description"></textarea></label>
-        <label class="full">标签（逗号分隔） <input id="f-tags" /></label>
-        <label class="full">子任务（每行一条，来自 AI 解析，可增删） <textarea id="f-subtasks" rows="3"></textarea></label>
-        <div class="row-actions">
-          <button id="btn-promote" class="btn primary">转入主数据库</button>
-          <button id="btn-delete-inbox" class="btn danger">忽略/删除</button>
-        </div>
-      </div>
-    </section>
 
-    <section class="panel tasks-panel">
-      <div class="panel-head">
-        <h2>主数据库 · 正式任务</h2>
-        <div class="task-view-toggle">
-          <button id="tab-active" class="tab active">进行中</button>
-          <button id="tab-archived" class="tab">已归档</button>
-        </div>
-      </div>
-      <div class="task-filter">
-        <input id="task-filter" type="text" placeholder="筛选：标题 / 描述 / 标签" />
-        <button id="btn-new-task" class="btn small primary">＋ 新建</button>
-      </div>
-      <div id="tasks-list" class="list"></div>
-    </section>
-  </main>
+        <div class="inbox-workspace">
+          <section class="surface inbox-list-pane" aria-label="记录区列表">
+            <div class="surface-head compact-head">
+              <div>
+                <div class="surface-title">全部记录</div>
+                <div class="surface-subtitle">按最近添加排序</div>
+              </div>
+              <span class="icon icon-inbox" aria-hidden="true"></span>
+            </div>
+            <div id="inbox-list" class="list inbox-list"></div>
+          </section>
 
-  <div id="settings-modal" class="modal hidden">
-    <div class="modal-box">
+          <section id="detail-panel" class="surface inspector-pane" aria-label="记录检查器">
+            <div class="inspector-head">
+              <div>
+                <div class="surface-title">记录详情</div>
+                <div class="surface-subtitle">核对建议，整理为正式任务</div>
+              </div>
+              <button id="btn-close-inspector" class="icon-btn" type="button" aria-label="关闭记录检查器" title="关闭检查器">关闭</button>
+            </div>
+            <div id="detail-empty" class="inspector-empty">
+              <div class="empty-mark" aria-hidden="true"><span class="icon icon-inbox"></span></div>
+              <div class="surface-title">选择一条记录</div>
+              <p>打开原文，查看 AI 建议，再整理成正式任务。</p>
+              <div class="empty-flow" aria-label="整理流程">
+                <span>收集</span><span class="flow-arrow" aria-hidden="true">→</span><span>检查</span><span class="flow-arrow" aria-hidden="true">→</span><span>转正</span>
+              </div>
+            </div>
+            <div id="detail-content" class="detail hidden">
+              <div class="detail-topline">
+                <div id="detail-source" class="detail-source"></div>
+                <span id="ai-status" class="badge"></span>
+              </div>
+
+              <div id="detail-image" class="detail-image hidden">
+                <div class="block-title">附图</div>
+                <img id="detail-img" alt="记录附件" />
+              </div>
+
+              <div class="raw-block">
+                <div class="block-title">原始记录</div>
+                <pre id="raw-text"></pre>
+                <div class="ai-line">
+                  <span id="ai-model"></span>
+                  <span class="detail-divider" aria-hidden="true"></span>
+                  <span class="immutable-note">原始内容不可修改</span>
+                  <button id="btn-reparse" class="btn small ghost" type="button">重新解析</button>
+                </div>
+              </div>
+
+              <div class="block-title">AI 建议</div>
+              <div id="ai-summary" class="ai-summary"></div>
+
+              <div class="draft-heading">
+                <div>
+                  <div class="block-title">转正草稿</div>
+                  <div class="draft-help">点击“转为正式任务”后保存，原始记录始终保留。</div>
+                </div>
+                <span id="promotion-progress" class="progress-note"></span>
+              </div>
+
+              <label class="full hidden" id="f-item-wrap">待办选择
+                <select id="f-item"></select>
+                <span id="f-item-state" class="field-note"></span>
+              </label>
+              <div class="form-grid">
+                <label>标题 <input id="f-title" autocomplete="off" /></label>
+                <label>类型
+                  <select id="f-kind"><option value="task">任务</option><option value="requirement">需求</option><option value="idea">想法</option><option value="note">记录</option></select>
+                </label>
+                <label>优先级
+                  <select id="f-priority"><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
+                </label>
+                <label>状态
+                  <select id="f-status"><option value="todo">待办</option><option value="in_progress">进行中</option><option value="blocked">阻塞</option><option value="done">完成</option></select>
+                </label>
+                <label>截止时间 <input id="f-due" type="datetime-local" /></label>
+                <label>预估工时（分钟） <input id="f-estimate" type="number" min="0" /></label>
+                <label>计划开始 <input id="f-start" type="datetime-local" /></label>
+                <label>计划结束 <input id="f-end" type="datetime-local" /></label>
+              </div>
+              <label class="full">描述 <textarea id="f-description"></textarea></label>
+              <label class="full">标签 <input id="f-tags" placeholder="逗号分隔" /></label>
+              <label class="full">子任务 <textarea id="f-subtasks" rows="3" placeholder="每行一条"></textarea></label>
+              <div class="row-actions">
+                <button id="btn-promote" class="btn primary" type="button">转为正式任务</button>
+                <button id="btn-delete-inbox" class="btn danger-ghost" type="button">忽略记录</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="view-tasks" class="view hidden" aria-labelledby="page-title">
+        <div class="view-toolbar task-tabs-toolbar">
+          <div class="task-view-toggle" role="tablist" aria-label="任务范围">
+            <button id="tab-active" class="tab active" type="button" role="tab" aria-selected="true">进行中 <span id="count-active" class="tab-count">0</span></button>
+            <button id="tab-completed" class="tab" type="button" role="tab" aria-selected="false">已完成 <span id="count-completed" class="tab-count">0</span></button>
+            <button id="tab-archived" class="tab" type="button" role="tab" aria-selected="false">已归档 <span id="count-archived" class="tab-count">0</span></button>
+          </div>
+          <button id="btn-new-task" class="btn primary" type="button"><span class="icon icon-plus" aria-hidden="true"></span>新建任务</button>
+        </div>
+
+        <section class="surface tasks-surface" aria-label="正式任务列表">
+          <div class="task-toolbar">
+            <label class="search-field">
+              <span class="search-icon icon icon-search" aria-hidden="true"></span>
+              <input id="task-filter" type="search" placeholder="搜索任务、描述或标签…" aria-label="搜索任务" autocomplete="off" />
+            </label>
+            <span id="tasks-count" class="list-count">0 项任务</span>
+          </div>
+          <div id="tasks-list" class="list tasks-list"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-hidden="true">
+    <div class="modal-box settings-box">
       <div class="modal-head">
         <div>
-          <h2>设置</h2>
-          <div class="sub">DeepSeek API 与应用启动选项</div>
+          <div class="eyebrow">WORKSPACE SETTINGS</div>
+          <h2 id="settings-title">设置</h2>
+          <div class="sub">配置 AI 服务与应用启动行为</div>
         </div>
+        <button class="icon-btn" type="button" data-modal-close="settings-modal" aria-label="关闭设置">关闭</button>
       </div>
 
       <div class="modal-body">
@@ -108,19 +206,21 @@
           <h3>AI 服务</h3>
           <label class="field">接口协议
             <select id="s-provider">
-              <option value="openai">OpenAI 兼容（DeepSeek / Kimi / Qwen / GLM / Ollama…）</option>
+              <option value="openai">OpenAI 兼容（DeepSeek / Kimi / Qwen / GLM / Ollama）</option>
               <option value="anthropic">Anthropic（Claude 官方 API）</option>
             </select>
           </label>
           <label class="field">API Key
-            <input id="s-api-key" type="password" placeholder="sk-... / sk-ant-..." autocomplete="off" />
-            <span class="hint">密钥仅保存在本机 settings.json；留空时读取环境变量（OpenAI 协议：DEEPSEEK_API_KEY / OPENAI_API_KEY，Anthropic：ANTHROPIC_API_KEY）。</span>
+            <input id="s-api-key" type="password" placeholder="输入新密钥后保存" autocomplete="new-password" />
+            <span id="s-key-state" class="credential-state">未保存 API Key</span>
+            <span class="hint">已保存的密钥不会回填到此输入框。留空表示保持当前密钥；勾选下方选项可明确移除。</span>
           </label>
+          <label class="check danger-check"><input id="s-remove-key" type="checkbox" /> 移除本机已保存的 API Key</label>
           <div class="field">
             <span>Base URL</span>
             <div class="preset-row">
               <input id="s-base-url" type="text" placeholder="https://api.deepseek.com" />
-              <select id="s-preset">
+              <select id="s-preset" aria-label="常用服务预设">
                 <option value="">常用预设…</option>
                 <option value="deepseek">DeepSeek</option>
                 <option value="openai">OpenAI</option>
@@ -134,43 +234,47 @@
           </div>
           <label class="field">模型
             <input id="s-model" type="text" placeholder="deepseek-v4-flash / claude-sonnet-4-5" />
-            <span class="hint">需与服务商匹配，例如 DeepSeek 填 deepseek-v4-flash，Anthropic 填 claude-sonnet-4-5。</span>
           </label>
           <label class="field">视觉模型（图片解析）
-            <input id="s-vision-model" type="text" placeholder="留空则用上面的主模型" />
-            <span class="hint">粘贴截图解析待办需要支持看图的模型，如 gpt-4o-mini、glm-4v-flash、qwen-vl-plus、claude 系列等（DeepSeek 当前无视觉模型）。</span>
+            <input id="s-vision-model" type="text" placeholder="留空则使用主模型" />
           </label>
-          <label class="check"><input id="s-disable-reasoning" type="checkbox" /> 图片解析时关闭模型思考/推理（推荐：推理 token 会挤占输出上限导致 JSON 截断；个别服务商报参数错误时再关闭此项）</label>
+          <label class="check"><input id="s-disable-reasoning" type="checkbox" /> 图片解析时关闭模型思考/推理</label>
+          <div class="service-note">
+            <div class="service-note-title">数据发送说明</div>
+            <p>启用 AI 整理后，文字、附言和图片会发送给你选择的 AI 服务，用于生成结构化建议。API Key 只保存在本机，并由 Windows 账户保护的应用设置承载；这里不会回填密钥。</p>
+          </div>
         </div>
 
         <div class="modal-section">
           <h3>通用</h3>
           <label class="check"><input id="s-auto-parse" type="checkbox" /> 记录后自动调用 AI 解析</label>
-          <label class="check"><input id="s-autostart" type="checkbox" /> 开机自启（登录 Windows 后自动运行到托盘）</label>
+          <label class="check"><input id="s-autostart" type="checkbox" /> 开机自启（登录 Windows 后运行到托盘）</label>
         </div>
       </div>
 
       <div class="modal-foot">
-        <button id="btn-close-settings" class="btn secondary">取消</button>
-        <button id="btn-save-settings" class="btn primary">保存设置</button>
+        <button id="btn-close-settings" class="btn secondary" type="button">取消</button>
+        <button id="btn-save-settings" class="btn primary" type="button">保存设置</button>
       </div>
     </div>
   </div>
 
-  <div id="task-modal" class="modal hidden">
-    <div class="modal-box">
+  <div id="task-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="e-modal-title" aria-hidden="true">
+    <div class="modal-box task-box">
       <div class="modal-head">
         <div>
+          <div class="eyebrow">TASK EDITOR</div>
           <h2 id="e-modal-title">编辑任务</h2>
           <div class="sub" id="e-meta"></div>
         </div>
+        <button class="icon-btn" type="button" data-modal-close="task-modal" aria-label="关闭任务编辑器">关闭</button>
       </div>
 
       <div class="modal-body">
         <div class="modal-section">
           <h3>基本信息</h3>
           <div class="form-grid">
-            <label>标题 <input id="e-title" /></label>
+            <label>标题 <input id="e-title" autocomplete="off" /></label>
             <label>类型
               <select id="e-kind"><option value="task">任务</option><option value="requirement">需求</option><option value="idea">想法</option><option value="note">记录</option></select>
             </label>
@@ -181,14 +285,14 @@
               <select id="e-priority"><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
             </label>
             <label>截止时间 <input id="e-due" type="datetime-local" /></label>
-            <label>预估工时(分钟) <input id="e-estimate" type="number" min="0" /></label>
-            <label id="e-actual-field">实际工时(分钟) <input id="e-actual" type="number" min="0" /></label>
-            <label id="e-progress-field">进度 %(0-100) <input id="e-progress" type="number" min="0" max="100" /></label>
+            <label>预估工时（分钟） <input id="e-estimate" type="number" min="0" /></label>
+            <label id="e-actual-field">实际工时（分钟） <input id="e-actual" type="number" min="0" /></label>
+            <label id="e-progress-field">进度（0–100） <input id="e-progress" type="number" min="0" max="100" /></label>
             <label>计划开始 <input id="e-start" type="datetime-local" /></label>
             <label>计划结束 <input id="e-end" type="datetime-local" /></label>
           </div>
           <label class="full">描述 <textarea id="e-description"></textarea></label>
-          <label class="full">标签（逗号分隔） <input id="e-tags" /></label>
+          <label class="full">标签 <input id="e-tags" placeholder="逗号分隔" /></label>
         </div>
 
         <div class="modal-section">
@@ -197,7 +301,7 @@
             <div id="e-subtasks" class="subtask-list"></div>
             <div class="subtask-add">
               <input id="e-subtask-new" type="text" placeholder="新增子任务，回车或点添加" />
-              <button id="e-subtask-add" class="btn small">添加</button>
+              <button id="e-subtask-add" class="btn small" type="button">添加</button>
             </div>
           </div>
           <textarea id="e-subtasks-new" class="hidden" rows="3" placeholder="每行一条子任务（可选）"></textarea>
@@ -205,13 +309,14 @@
       </div>
 
       <div class="modal-foot">
-        <button id="btn-close-task" class="btn secondary">取消</button>
-        <button id="btn-save-task" class="btn primary">保存修改</button>
+        <button id="btn-close-task" class="btn secondary" type="button">取消</button>
+        <button id="btn-save-task" class="btn primary" type="button">保存修改</button>
       </div>
     </div>
   </div>
 
-  <div id="toast" class="toast hidden"></div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
   <script src="main.js"></script>
+  <script src="window-controls.js"></script>
 </body>
 </html>
