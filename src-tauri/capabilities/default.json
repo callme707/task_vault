@@ -5,6 +5,7 @@
   "windows": ["main", "quick"],
   "permissions": [
     "core:default",
-    "autostart:default"
+    "autostart:default",
+    "core:window:allow-start-dragging"
   ]
 }

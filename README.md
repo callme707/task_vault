@@ -1,70 +1,95 @@
 # TaskVault（任务记录工具）
 
-Windows 桌面工具：全局快捷键快速记录 → 临时数据库（inbox.db）→ DeepSeek AI 自动整理 → 主数据库（tasks.db）正式任务与时间安排。
+当前正式版本：`v1.0.0`（2026-09-16），详见 [更新记录](CHANGELOG.md)。
 
-## 当前已实现（M0 + M1 + M2 基础）
-- 开机自启开关（主窗口设置中可开/关，开启后以 `--hidden` 静默启动到托盘）
-- 全局快捷键：
-  - `Ctrl+Alt+Q`：快速记录窗口呼出 / 隐藏（toggle）
-  - `Ctrl+Alt+W`：主窗口呼出 / 隐藏（toggle）
-- 托盘图标：打开主窗口、快速记录、退出
-- 双 SQLite 数据库：`inbox.db` / `tasks.db`（WAL 模式）
-- 快速窗口录入后写入临时库，原始记录只读保留
-- 后台自动调用 AI（默认 DeepSeek）做 JSON 结构化整理，支持 OpenAI 兼容协议（DeepSeek/Kimi/Qwen/GLM/Ollama 等）与 Anthropic 协议，设置中可切换并内置常用服务商预设
-- 主窗口：临时库列表 / 原始记录 + AI 解析结果 / 转正草稿 / 主库任务列表
-- 临时记录转正式任务（保留来源与原始快照，AI 解析的子任务一并带入）
-- 主库任务操作：手动调整优先级、归档/恢复归档、删除（软删除）
-- 主库直接新建任务（不经过收件箱，子任务可按行填写）
-- 任务编辑：点击任务卡片可编辑全部字段（状态/优先级/截止/预估与实际工时/进度/计划时间/标签）
-- 状态快捷流转：开始 / 完成 / 重开 一键操作
-- 子任务清单：勾选完成、追加、删除，实时保存
-- 任务列表：进度条、过期高亮、按标题/描述/标签筛选
+Windows 桌面任务工作台：快速记录文字或截图，AI 整理成建议，确认后加入正式任务。Rust + Tauri 2，原生 HTML/CSS/JavaScript，无前端构建依赖。
 
-## 目录
-```
-src-tauri/             Rust 后端（Tauri 2）
-  src/db.rs            双 SQLite 数据库
-  src/deepseek.rs      DeepSeek Chat Completions 客户端
-  src/settings.rs      设置读写
-  src/commands.rs      前端可调用的命令
-  src/lib.rs           窗口/托盘/快捷键/应用状态
-ui/                    静态前端（无 npm 构建）
-```
+## 使用方式
 
-## 运行
-```bash
+- `Ctrl+Alt+Q` 呼出/隐藏快速记录；`Enter` 保存，`Shift+Enter` 换行，`Esc` 隐藏。
+- `Ctrl+Alt+W` 呼出/隐藏工作台。关闭窗口会驻留托盘，托盘“退出”结束应用。
+- 导航分为“记录区”和“正式任务”；选择记录后打开详情与可编辑草稿。
+- 正式任务分为“进行中 / 已完成 / 已归档”。未归档的待办、进行中和阻塞任务显示在“进行中”；完成后移至“已完成”。两类任务都能直接归档，恢复时保留原完成状态；已完成任务也可重开。
+- 主窗口使用与界面一致的深色标题栏，可拖动、双击最大化，并提供最小化、最大化/还原和关闭到托盘按钮。
+- 一张图保留一条原始记录。AI 可识别多个待办，每项分别确认、分别显示是否已添加。
+- 任务支持状态、优先级、截止/计划时间、标签、工时、进度和子任务；也可直接新建。
+- 状态、进度、工时与子任务完成数各自独立；子任务操作即时保存，关闭编辑窗口不撤销这些操作。
+
+## 可靠性与数据保护
+
+- 任务、子任务和收件箱转正标记统一提交；同一原始待办重复提交返回已有任务。
+- AI 请求持久排队，同一条记录不会同时重复解析，最多两条并行。重启后恢复未完成的已请求任务；历史失败不会无条件反复重试。
+- PNG/JPEG/GIF/WebP 在保存前统一校验，单图最多 4 MiB；附件缺失或损坏会明确标记解析失败。
+- 截断后恢复的 AI 结果标为“待核对”，不能视为完整识别。
+- 时间统一以带时区的时间戳保存，界面按本地时区显示。
+- 数据库与图片使用 Windows 当前用户 DPAPI 加密；运行中数据库在内存处理，成功写入原子替换的加密快照后才返回成功。
+- API Key 以 DPAPI 密文写入 `settings.json`，界面不会收到原始密钥。留空保留已保存密钥，清除需要显式勾选。
+- 服务地址只允许 HTTPS，或本机回环 HTTP；切换服务来源时需要重新填写或清除已保存密钥。HTTP 请求不跟随重定向。
+- 配置损坏、密文校验失败时保留原文件并报告错误，不以默认值覆盖已有数据。
+- AI 解析会把当前记录的文字/图片发送给设置中选择的服务。关闭“自动解析”后只在手动操作时发送。
+
+## 数据与升级
+
+数据目录为 `%APPDATA%/com.local.taskvault/`。旧版 `inbox.db` / `tasks.db` 会在首次启动新版时迁入统一的加密数据文件；旧数据的归档也使用加密形式。旧附件保留引用名称并原子升级为密文。迁移失败会中止启动，保留可恢复的数据。
+
+升级前请从旧版 TaskVault 的托盘菜单选择“退出”，确认旧实例完全结束后，备份整个 `%APPDATA%\com.local.taskvault` 目录。加密数据依赖原 Windows 用户的 DPAPI 密钥，升级后应继续使用同一 Windows 用户；不要把加密文件复制到另一账户后就删除原环境。旧版应用不能直接读取新版加密数据，旧版升级到新版后不可直接降级；需要回退时保留并恢复升级前的完整备份。
+
+## AI 服务
+
+支持 OpenAI Chat Completions 兼容协议和 Anthropic Messages 协议。服务商预设只负责填入地址与模型名称，模型能力仍取决于服务商。
+
+主模型和视觉模型可以分别指定，但共用协议、地址和密钥。OpenAI 兼容的本机回环服务可不填写密钥。环境变量 `DEEPSEEK_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` 分别只用于对应官方服务地址；自定义网关需在设置中明确填写密钥，不会继承全局环境密钥。
+
+## 开发与验证
+
+```powershell
 cd src-tauri
 cargo run
+cargo test --offline --locked
+cargo clippy --offline --locked --all-targets -- -D warnings
+cargo build --release --offline --locked
+cargo tauri build --ci --bundles nsis,msi -- --offline --locked
 ```
 
-首次启动会创建 `%APPDATA%/com.local.taskvault/`：
-- `inbox.db`：临时库
-- `tasks.db`：主库
-- `settings.json`：配置（API Key、模型等）
+如果正运行 `src-tauri/target/release/task-vault.exe`，请先从托盘退出，再覆盖构建。`v1.0.0` 本地安装器已生成：
 
-在主窗口右上角“设置”中选择接口协议与服务商（或自定义 Base URL / 模型），并填入对应 API Key；也可以使用环境变量（`DEEPSEEK_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`）。
+- `src-tauri/target/release/bundle/nsis/TaskVault_1.0.0_x64-setup.exe`
+- `src-tauri/target/release/bundle/msi/TaskVault_1.0.0_x64_en-US.msi`
 
-## 快捷键使用
-1. 按 `Ctrl+Alt+Q` 呼出快速记录窗；
-2. 输入任务/需求/想法，`Enter` 保存并隐藏，`Esc` 隐藏；
-3. 后台自动解析（不阻塞窗口关闭）；
-4. 打开主窗口，查看 AI 解析结果，修改草稿后点“转入主数据库”。
+安装包和主程序版本号已核验为 `1.0.0`，MSI 升级标识与 `v0.1.0` 一致；尚未执行实际安装测试。当前仓库未配置远程地址，本次为本地发布。
 
-## 打包
-```bash
-cargo install tauri-cli --locked   # 首次需要安装 tauri-cli
-cd src-tauri
-cargo tauri build                  # 需要系统安装 NSIS/WiX，目标为 Windows
+前端独立预览（仅合成数据，不连接真实数据库或 AI）：
+
+```powershell
+node scripts/preview.cjs
 ```
+
+按终端打印的回环地址访问。该服务器只允许访问明确列出的 UI 资源；操作只影响页面内存，刷新即重置。
+
+前端回归：`node ui/tests/time-format.test.js` 和 `node ui/tests/task-views.test.js`。浏览器预览不具备原生窗口控制能力，标题栏按钮会禁用；实际窗口行为由 Tauri 提供。原生窗口、托盘行为和真实 AI 服务请求尚未在目标 Windows 环境实测。
+
+## 界面参考
+
+v1.0.0 采用石墨灰背景、蓝紫强调色和细分隔任务行。只读调研了 [Planify](https://github.com/alainm23/planify) 和 [AppFlowy](https://github.com/AppFlowy-IO/AppFlowy)，实际视觉参考为 Planify README 的[官方深色截图](https://raw.githubusercontent.com/alainm23/planify/main/data/resources/screenshot/screenshot-03.png)：借鉴任务分组和紧凑列表的信息层次，保留本项目的记录确认流程；未复制其源码。AppFlowy README 的历史任务截图链接已失效，未将其作为视觉核验依据。
+
+本地静态图标来自 Lucide `0.468.0`，来源及 ISC 许可见 `ui/icons/README.md`、`ui/icons/LICENSE`，运行时无需联网加载图标。
+
+## 源码导航
+
+| 路径 | 职责 |
+|---|---|
+| `src-tauri/src/lib.rs` | 生命周期、窗口、托盘、共享状态与启动恢复 |
+| `src-tauri/src/commands.rs` | UI 命令边界 |
+| `src-tauri/src/db.rs` | 数据迁移、事务、加密快照、请求代次与转正幂等 |
+| `src-tauri/src/ai_queue.rs` | 有界 AI 执行、失败持久化、恢复 |
+| `src-tauri/src/deepseek.rs` | 两种 AI 协议、提示词、结果容错 |
+| `src-tauri/src/storage.rs` | Windows DPAPI 与原子文件替换 |
+| `src-tauri/src/attachments.rs` | 图片输入校验、加密附件与旧文件迁移 |
+| `src-tauri/src/settings.rs` | 密钥保护、脱敏配置与地址验证 |
+| `ui/` | 深色工作台、详情、设置与快速录入 |
+
+自动排期、到期提醒、时间线、跨账户导出暂未实现。
 
 ## 分支工作流
-- `dev`：开发主线，所有功能在此汇合
-- `feature/*`：从 `dev` 拉出，一个功能一个分支，完成后合回 `dev`
-- `main`：稳定发布分支，`dev` → `main` 的合并需人工审批后执行
 
-## 后续计划
-- 设置页开放快捷键自定义
-- AI 批量整理/合并相似临时记录（不修改原文）
-- 时间线视图（今日/本周）
-- 每日/每周 AI 排期建议与到期提醒
-- 数据库备份与导出
+`dev` 是开发主线，`main` 是稳定发布分支。本次 `v1.0.0` 变更已获授权合入本地 `dev` 与 `main`；后续合入 `main` 与发布仍需人工审批。
