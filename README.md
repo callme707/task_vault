@@ -1,5 +1,7 @@
 # TaskVault（任务记录工具）
 
+当前正式版本：`v1.0.0`（2026-09-16），详见 [更新记录](CHANGELOG.md)。
+
 Windows 桌面任务工作台：快速记录文字或截图，AI 整理成建议，确认后加入正式任务。Rust + Tauri 2，原生 HTML/CSS/JavaScript，无前端构建依赖。
 
 ## 使用方式
@@ -30,7 +32,7 @@ Windows 桌面任务工作台：快速记录文字或截图，AI 整理成建议
 
 数据目录为 `%APPDATA%/com.local.taskvault/`。旧版 `inbox.db` / `tasks.db` 会在首次启动新版时迁入统一的加密数据文件；旧数据的归档也使用加密形式。旧附件保留引用名称并原子升级为密文。迁移失败会中止启动，保留可恢复的数据。
 
-加密数据依赖原 Windows 账户的 DPAPI 密钥；不要把加密文件复制到另一账户后就删除原环境。旧版应用不能直接读取新版加密数据。升级前应退出旧版 TaskVault。
+升级前请从旧版 TaskVault 的托盘菜单选择“退出”，确认旧实例完全结束后，备份整个 `%APPDATA%\com.local.taskvault` 目录。加密数据依赖原 Windows 用户的 DPAPI 密钥，升级后应继续使用同一 Windows 用户；不要把加密文件复制到另一账户后就删除原环境。旧版应用不能直接读取新版加密数据，旧版升级到新版后不可直接降级；需要回退时保留并恢复升级前的完整备份。
 
 ## AI 服务
 
@@ -46,9 +48,15 @@ cargo run
 cargo test --offline --locked
 cargo clippy --offline --locked --all-targets -- -D warnings
 cargo build --release --offline --locked
+cargo tauri build --ci --bundles nsis,msi -- --offline --locked
 ```
 
-如果正运行 `target/release/task-vault.exe`，请先从托盘退出，再覆盖构建。2026-09-16 的第二版界面交付另存为 `src-tauri/target/release/task-vault-redesign-v2.exe`；退出旧实例后再打开新版，否则单实例机制只会唤起旧界面。
+如果正运行 `src-tauri/target/release/task-vault.exe`，请先从托盘退出，再覆盖构建。`v1.0.0` 本地安装器已生成：
+
+- `src-tauri/target/release/bundle/nsis/TaskVault_1.0.0_x64-setup.exe`
+- `src-tauri/target/release/bundle/msi/TaskVault_1.0.0_x64_en-US.msi`
+
+安装包和主程序版本号已核验为 `1.0.0`，MSI 升级标识与 `v0.1.0` 一致；尚未执行实际安装测试。当前仓库未配置远程地址，本次为本地发布。
 
 前端独立预览（仅合成数据，不连接真实数据库或 AI）：
 
@@ -58,11 +66,11 @@ node scripts/preview.cjs
 
 按终端打印的回环地址访问。该服务器只允许访问明确列出的 UI 资源；操作只影响页面内存，刷新即重置。
 
-前端回归：`node ui/tests/time-format.test.js` 和 `node ui/tests/task-views.test.js`。浏览器预览不具备原生窗口控制能力，标题栏按钮会禁用；实际窗口行为由 Tauri 提供。
+前端回归：`node ui/tests/time-format.test.js` 和 `node ui/tests/task-views.test.js`。浏览器预览不具备原生窗口控制能力，标题栏按钮会禁用；实际窗口行为由 Tauri 提供。原生窗口、托盘行为和真实 AI 服务请求尚未在目标 Windows 环境实测。
 
 ## 界面参考
 
-第二版采用石墨灰背景、蓝紫强调色和细分隔任务行。只读调研了 [Planify](https://github.com/alainm23/planify) 和 [AppFlowy](https://github.com/AppFlowy-IO/AppFlowy)，实际视觉参考为 Planify README 的[官方深色截图](https://raw.githubusercontent.com/alainm23/planify/main/data/resources/screenshot/screenshot-03.png)：借鉴任务分组和紧凑列表的信息层次，保留本项目的记录确认流程；未复制其源码。AppFlowy README 的历史任务截图链接已失效，未将其作为视觉核验依据。
+v1.0.0 采用石墨灰背景、蓝紫强调色和细分隔任务行。只读调研了 [Planify](https://github.com/alainm23/planify) 和 [AppFlowy](https://github.com/AppFlowy-IO/AppFlowy)，实际视觉参考为 Planify README 的[官方深色截图](https://raw.githubusercontent.com/alainm23/planify/main/data/resources/screenshot/screenshot-03.png)：借鉴任务分组和紧凑列表的信息层次，保留本项目的记录确认流程；未复制其源码。AppFlowy README 的历史任务截图链接已失效，未将其作为视觉核验依据。
 
 本地静态图标来自 Lucide `0.468.0`，来源及 ISC 许可见 `ui/icons/README.md`、`ui/icons/LICENSE`，运行时无需联网加载图标。
 
@@ -84,4 +92,4 @@ node scripts/preview.cjs
 
 ## 分支工作流
 
-`dev` 是开发主线，`main` 是稳定发布分支。合入 `main` 与发布需要人工审批。本轮修复位于 `codex/taskvault-reliability-ui`。
+`dev` 是开发主线，`main` 是稳定发布分支。本次 `v1.0.0` 变更已获授权合入本地 `dev` 与 `main`；后续合入 `main` 与发布仍需人工审批。
