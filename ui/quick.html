@@ -44,6 +44,13 @@
           <span id="status" role="status" aria-live="polite"></span>
         </div>
         <div class="action-buttons">
+          <select id="quick-persona" class="quick-persona-select" aria-label="解析专家身份" title="按需指定本条记录的 AI 专家拆解视角">
+            <option value="">🤖 默认视角</option>
+            <option value="auto">🤖 智能自适应</option>
+            <option value="dev">💻 研发专家</option>
+            <option value="pm">📋 产品项目</option>
+            <option value="gtd">🎯 GTD 行动</option>
+          </select>
           <button id="btn-cancel" class="btn" type="button">隐藏</button>
           <button id="btn-save" class="btn primary" type="button">✨ 保存记录</button>
         </div>

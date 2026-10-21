@@ -199,7 +199,15 @@
                     <span id="ai-model" class="model-tag"></span>
                     <span class="detail-divider" aria-hidden="true"></span>
                     <span class="immutable-note">原始记录只读保护</span>
-                    <button id="btn-reparse" class="btn small ghost" type="button">↻ 重新解析</button>
+                    <div class="reparse-group">
+                      <select id="reparse-persona" class="persona-select" aria-label="选择专家身份重新解析" title="切换 AI 专家拆解视角">
+                        <option value="auto">🤖 智能路由</option>
+                        <option value="dev">💻 研发专家</option>
+                        <option value="pm">📋 产品项目</option>
+                        <option value="gtd">🎯 GTD 行动</option>
+                      </select>
+                      <button id="btn-reparse" class="btn small ghost" type="button">↻ 重新解析</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -406,6 +414,16 @@
               <input id="s-vision-model" type="text" placeholder="留空则使用主模型" />
             </label>
           </div>
+
+          <label class="field">默认解析专家身份（Jev 风格前置决策路由）
+            <select id="s-default-persona">
+              <option value="auto">🤖 智能自适应 · 按内容自动匹配研发 / 产品 / GTD 视角（推荐）</option>
+              <option value="dev">💻 研发与架构专家 · 聚焦排障链路、接口实现与联调自测</option>
+              <option value="pm">📋 产品与项目专家 · 聚焦需求边界、验收标准(DoD)与排期对齐</option>
+              <option value="gtd">🎯 GTD 行动教练 · 消除模糊动词，拆解为 15–30 分钟最小物理动作</option>
+            </select>
+            <span class="hint">智能自适应会在单次请求首字段先完成角色路由决策，也可在快速记录窗或审阅台中按需单条切换。</span>
+          </label>
 
           <label class="field">API Key 密钥
             <div class="key-input-row">

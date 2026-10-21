@@ -32,6 +32,16 @@ impl AiQueue {
     }
 
     pub fn enqueue(&self, app: &AppHandle, id: i64, request: bool) -> Result<bool, String> {
+        self.enqueue_with_persona(app, id, request, None)
+    }
+
+    pub fn enqueue_with_persona(
+        &self,
+        app: &AppHandle,
+        id: i64,
+        request: bool,
+        persona: Option<String>,
+    ) -> Result<bool, String> {
         let state = app.state::<AppState>();
         let settings = state.settings.read().map_err(|_| "设置读取失败")?.clone();
         if !settings.api_ready() {
@@ -42,6 +52,11 @@ impl AiQueue {
         }
         let Some(generation) = state.db.claim_ai(id)? else {
             return Ok(false);
+        };
+        let existing_tags = state.db.top_task_tags(20).unwrap_or_default();
+        let ctx = deepseek::ParseContext {
+            persona: persona.unwrap_or_default(),
+            existing_tags,
         };
         let db = state.db.clone();
         let http = state.http.clone();
@@ -65,9 +80,16 @@ impl AiQueue {
                     move |text, image| {
                         let http = http.clone();
                         let settings = settings.clone();
+                        let ctx = ctx.clone();
                         async move {
-                            deepseek::parse_inbox_text(&http, &settings, &text, image.as_ref())
-                                .await
+                            deepseek::parse_inbox_text_with_context(
+                                &http,
+                                &settings,
+                                &text,
+                                image.as_ref(),
+                                &ctx,
+                            )
+                            .await
                         }
                     },
                 ))

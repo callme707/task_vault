@@ -32,6 +32,9 @@ pub struct InboxItem {
 /// AI 解析出的结构化结果。字段全部可选，避免模型少返回一个字段导致整条解析失败。
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AiParsed {
+    /// Jev-style System-1 routed expert persona ("dev" | "pm" | "gtd").
+    #[serde(default)]
+    pub persona: String,
     #[serde(default)]
     pub is_actionable: bool,
     #[serde(default)]

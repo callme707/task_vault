@@ -22,7 +22,12 @@ fn attachments_dir(state: &State<'_, AppState>) -> std::path::PathBuf {
         .join("attachments")
 }
 
-fn trigger_parse(app: &AppHandle, state: &State<'_, AppState>, id: i64) {
+fn trigger_parse(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    id: i64,
+    persona: Option<String>,
+) {
     let result = (|| -> Result<(), String> {
         let settings = state.settings.read().map_err(|_| "设置读取失败")?.clone();
         if !settings.auto_parse {
@@ -30,7 +35,7 @@ fn trigger_parse(app: &AppHandle, state: &State<'_, AppState>, id: i64) {
         } else if !settings.api_ready() {
             state.db.set_ai_result(id, "unconfigured", None, None)?;
         } else {
-            state.ai_queue.enqueue(app, id, true)?;
+            state.ai_queue.enqueue_with_persona(app, id, true, persona)?;
         }
         Ok(())
     })();
@@ -46,13 +51,14 @@ pub async fn capture_inbox_image(
     state: State<'_, AppState>,
     text: Option<String>,
     image_base64: String,
+    persona: Option<String>,
 ) -> Result<InboxItem, String> {
     // Validate before writing either attachment or record.
     let bytes = attachments::decode_capture(&image_base64)?;
     let name = attachments::save(&attachments_dir(&state), &bytes)?;
     let raw = text.unwrap_or_default().trim().to_string();
     let item = state.db.insert_inbox(&raw, "image", Some(&name))?;
-    trigger_parse(&app, &state, item.id);
+    trigger_parse(&app, &state, item.id, persona);
     state.db.get_inbox(item.id)
 }
 
@@ -95,6 +101,7 @@ pub async fn capture_inbox(
     state: State<'_, AppState>,
     text: String,
     source: Option<String>,
+    persona: Option<String>,
 ) -> Result<InboxItem, String> {
     let raw = text.trim();
     if raw.is_empty() {
@@ -103,7 +110,7 @@ pub async fn capture_inbox(
     let item = state
         .db
         .insert_inbox(raw, source.as_deref().unwrap_or("hotkey"), None)?;
-    trigger_parse(&app, &state, item.id);
+    trigger_parse(&app, &state, item.id, persona);
     state.db.get_inbox(item.id)
 }
 
@@ -118,8 +125,15 @@ pub fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
 }
 
 #[tauri::command(async)]
-pub fn parse_inbox_item(app: AppHandle, state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    state.ai_queue.enqueue(&app, id, true)?;
+pub fn parse_inbox_item(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: i64,
+    persona: Option<String>,
+) -> Result<(), String> {
+    state
+        .ai_queue
+        .enqueue_with_persona(&app, id, true, persona)?;
     Ok(())
 }
 
