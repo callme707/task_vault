@@ -481,3 +481,27 @@ textarea::placeholder {
   cursor: not-allowed;
   opacity: 0.5;
 }
+
+.quick-persona-select {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-input);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.quick-persona-select:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.quick-persona-select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}

@@ -534,6 +534,47 @@ impl Db {
         Ok(tasks)
     }
 
+    /// Return the most frequently used task tags across non-deleted tasks so
+    /// AI parsing can reuse existing taxonomy instead of inventing synonyms.
+    pub fn top_task_tags(&self, limit: usize) -> Result<Vec<String>, String> {
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+        let conn = self.lock_state()?;
+        let mut stmt = conn
+            .prepare("SELECT tags FROM tasks WHERE deleted_at IS NULL ORDER BY id DESC")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        let mut counts: HashMap<String, (usize, usize)> = HashMap::new();
+        let mut order = 0usize;
+        for row in rows {
+            let raw = row.map_err(|e| e.to_string())?;
+            for tag in parse_string_list(&raw) {
+                let trimmed = tag.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let entry = counts
+                    .entry(trimmed.to_string())
+                    .or_insert_with(|| {
+                        let first = order;
+                        order += 1;
+                        (0, first)
+                    });
+                entry.0 += 1;
+            }
+        }
+        let mut ranked: Vec<(String, usize, usize)> = counts
+            .into_iter()
+            .map(|(tag, (count, first_seen))| (tag, count, first_seen))
+            .collect();
+        ranked.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.2.cmp(&b.2)));
+        ranked.truncate(limit);
+        Ok(ranked.into_iter().map(|(tag, _, _)| tag).collect())
+    }
+
     pub fn list_archived_tasks(&self) -> Result<Vec<Task>, String> {
         let conn = self.lock_state()?;
         let mut tasks = query_tasks_conn(&conn, "deleted_at IS NULL AND is_archived = 1")?;

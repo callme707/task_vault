@@ -111,15 +111,18 @@ async function save() {
   saving = true;
   setSaveBusy(true);
   setStatus("正在保存到记录区…");
+  const personaSelect = document.getElementById("quick-persona");
+  const persona = personaSelect?.value ? personaSelect.value : null;
   try {
     if (pendingImage) {
       const comma = pendingImage.indexOf(",");
       const imageBase64 = comma >= 0 ? pendingImage.slice(comma + 1) : pendingImage;
-      await invoke("capture_inbox_image", { text: text || null, imageBase64 });
+      await invoke("capture_inbox_image", { text: text || null, imageBase64, persona });
     } else {
-      await invoke("capture_inbox", { text, source: "hotkey" });
+      await invoke("capture_inbox", { text, source: "hotkey", persona });
     }
     input.value = "";
+    if (personaSelect) personaSelect.value = "";
     clearImage(true);
     setStatus("已保存");
     await hideQuickWindow();
