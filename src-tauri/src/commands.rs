@@ -9,6 +9,11 @@ use crate::models::{InboxItem, Subtask, Task, TaskDraft};
 use crate::settings::{SettingsUpdate, SettingsView};
 use crate::AppState;
 
+// Tauri 2 runs plain (non-async) commands on the main thread. Commands that
+// lock the database, write the encrypted snapshot or decode images use
+// `#[tauri::command(async)]` so that work cannot freeze the window. Settings,
+// hotkey and window commands stay synchronous on purpose.
+
 fn attachments_dir(state: &State<'_, AppState>) -> std::path::PathBuf {
     state
         .settings_path
@@ -51,7 +56,7 @@ pub async fn capture_inbox_image(
     state.db.get_inbox(item.id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_inbox_image(state: State<'_, AppState>, id: i64) -> Result<Option<String>, String> {
     let item = state.db.get_inbox(id)?;
     if item.deleted_at.is_some() {
@@ -65,7 +70,7 @@ pub fn read_inbox_image(state: State<'_, AppState>, id: i64) -> Result<Option<St
     Ok(Some(format!("data:{};base64,{}", img.mime, img.data)))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_image_file_base64(path: String) -> Result<String, String> {
     let extension = Path::new(&path)
         .extension()
@@ -102,23 +107,23 @@ pub async fn capture_inbox(
     state.db.get_inbox(item.id)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_inbox(state: State<'_, AppState>) -> Result<Vec<InboxItem>, String> {
     state.db.list_inbox(false)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
     state.db.list_tasks()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn parse_inbox_item(app: AppHandle, state: State<'_, AppState>, id: i64) -> Result<(), String> {
     state.ai_queue.enqueue(&app, id, true)?;
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn process_pending_inbox(app: AppHandle, state: State<'_, AppState>) -> Result<usize, String> {
     let mut started = 0;
     for id in state.db.pending_ai_ids()? {
@@ -127,7 +132,7 @@ pub fn process_pending_inbox(app: AppHandle, state: State<'_, AppState>) -> Resu
     Ok(started)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn promote_inbox(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -141,7 +146,7 @@ pub fn promote_inbox(
     Ok(task)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_task(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -155,14 +160,14 @@ pub fn create_task(
     Ok(task)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_task(app: AppHandle, state: State<'_, AppState>, task: Task) -> Result<Task, String> {
     let updated = state.db.update_task(&task)?;
     let _ = app.emit("tasks-updated", ());
     Ok(updated)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn add_subtask(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -174,7 +179,7 @@ pub fn add_subtask(
     Ok(st)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_subtask_done(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -186,40 +191,40 @@ pub fn set_subtask_done(
     Ok(st)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_subtask(app: AppHandle, state: State<'_, AppState>, id: i64) -> Result<(), String> {
     state.db.delete_subtask(id)?;
     let _ = app.emit("tasks-updated", ());
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_archived_tasks(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
     state.db.list_archived_tasks()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn archive_task(app: AppHandle, state: State<'_, AppState>, id: i64) -> Result<Task, String> {
     let task = state.db.set_task_archived(id, true)?;
     let _ = app.emit("tasks-updated", ());
     Ok(task)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn unarchive_task(app: AppHandle, state: State<'_, AppState>, id: i64) -> Result<Task, String> {
     let task = state.db.set_task_archived(id, false)?;
     let _ = app.emit("tasks-updated", ());
     Ok(task)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_task(app: AppHandle, state: State<'_, AppState>, id: i64) -> Result<(), String> {
     state.db.delete_task(id)?;
     let _ = app.emit("tasks-updated", ());
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_task_priority(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -231,7 +236,7 @@ pub fn set_task_priority(
     Ok(task)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_inbox(app: AppHandle, state: State<'_, AppState>, id: i64) -> Result<(), String> {
     state.db.soft_delete_inbox(id)?;
     let _ = app.emit("inbox-updated", id);

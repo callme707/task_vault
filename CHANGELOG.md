@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.1.0] - 2026-10-21
+
+TaskVault `v1.1.0` 特性与体验升级版本，基于提交 `cc56a12`。本版本完成后端数据库与附件命令全异步化改造、多模态大图超时调优，并将主界面与快速记录窗升级为“活力极光毛玻璃（Sunlit Aurora & Electric Pop）+ Bento 卡片 + Apple Fluid Motion 流体动效”视觉体系。
+
+### 新增与改进
+
+- **后端全异步化与多模态超时优化（`a0e097a`）**：
+  - 将涉及 SQLite 读写与磁盘附件 I/O 的 Tauri 命令全面升级为 `async fn` + `tokio::task::spawn_blocking`，消除高负载或磁盘读写时的主窗口 UI 阻塞。
+  - 放宽图片多模态视觉解析请求超时至 180 秒（纯文本保持 90 秒），提升高分辨率截图与复杂长图待办提炼的稳定性。
+- **Sunlit Aurora & Electric Pop 双主题工作台（`578dbe2`）**：
+  - 重构主工作台为活力极光毛玻璃与 Bento 卡片布局，内置一键切换“☀️ 活力日光 / 🌙 极光暗夜”双主题（持久化于本地配置）。
+  - 在快速记录区与正式任务看板新增多维胶囊快筛与脉冲指标统计带（进行中、高优焦点、已完成、已归档实时汇总）。
+- **Apple Fluid Motion 次级界面过渡与流光快速记录窗（`b0ea69d`）**：
+  - **右侧审阅台分层级联**：选中记录时，原始卡片、AI 提炼卡、草稿编辑卡按弹簧物理曲线级联展开，支持平滑收起与多待办草稿切换过渡。
+  - **Apple Sheet 模态框动效**：任务编辑与设置弹窗采用背景毛玻璃渐显 + 主体弹性缩放 + 内部区块级联入场与平滑回缩关闭。
+  - **零闪烁轮询与先行操作反馈**：4 秒后台自动刷新采用签名比对（`lastInboxItemsSig` / `lastTaskRenderSig`）与原地 `.active` 状态更新，彻底消除轮询导致的 DOM 重建与动画重播；点击完成/开始/归档/删除具备即时物理反馈过渡。
+  - **流光霓虹快速记录窗**：`Ctrl+Alt+Q` 快速记录悬浮窗启用透明无边框舞台，配备 4 秒流转渐变霓虹边框、科技扫描线与双向弹性缩放呼出/收起动效。
+  - **WebView2 ClearType 字体锐度保护**：移除文字卡片与弹窗主体上的 `filter: blur()` 合成降级因素，保持 Windows DirectWrite 亚像素字体清晰锐利。
+
+### 构建输出路径
+
+`v1.1.0` 已通过 Tauri 发布构建，生成以下本地可执行文件与安装器：
+
+- `src-tauri/target/release/task-vault.exe`
+- `src-tauri/target/release/bundle/nsis/TaskVault_1.1.0_x64-setup.exe`
+- `src-tauri/target/release/bundle/msi/TaskVault_1.1.0_x64_en-US.msi`
+
+---
+
 ## [1.0.0] - 2026-09-16
 
 TaskVault 首个 1.x 大版本，基于提交 `fe7f0a5`。本版本统一快速记录、AI 整理和正式任务管理，并改进本地数据保护与故障恢复。

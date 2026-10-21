@@ -1,24 +1,25 @@
 # TaskVault（任务记录工具）
 
-当前正式版本：`v1.0.0`（2026-09-16），详见 [更新记录](CHANGELOG.md)。
+当前正式版本：`v1.1.0`（2026-10-21），详见 [更新记录](CHANGELOG.md)。
 
 Windows 桌面任务工作台：快速记录文字或截图，AI 整理成建议，确认后加入正式任务。Rust + Tauri 2，原生 HTML/CSS/JavaScript，无前端构建依赖。
 
 ## 使用方式
 
-- `Ctrl+Alt+Q` 呼出/隐藏快速记录；`Enter` 保存，`Shift+Enter` 换行，`Esc` 隐藏。
+- `Ctrl+Alt+Q` 呼出/隐藏透明流光快速记录窗；`Enter` 保存，`Shift+Enter` 换行，`Esc` 隐藏。
 - `Ctrl+Alt+W` 呼出/隐藏工作台。关闭窗口会驻留托盘，托盘“退出”结束应用。
-- 导航分为“记录区”和“正式任务”；选择记录后打开详情与可编辑草稿。
-- 正式任务分为“进行中 / 已完成 / 已归档”。未归档的待办、进行中和阻塞任务显示在“进行中”；完成后移至“已完成”。两类任务都能直接归档，恢复时保留原完成状态；已完成任务也可重开。
-- 主窗口使用与界面一致的深色标题栏，可拖动、双击最大化，并提供最小化、最大化/还原和关闭到托盘按钮。
+- 导航分为“记录区”和“正式任务”，内置“☀️ 活力日光 / 🌙 极光暗夜”双主题一键切换；选择记录后右侧审阅台级联展开详情与可编辑草稿。
+- 正式任务配备脉冲统计指标带与多维胶囊快筛，按“进行中 / 已完成 / 已归档”三组展示。未归档的待办、进行中和阻塞任务显示在“进行中”；完成后移至“已完成”。两类任务都能直接归档，恢复时保留原完成状态；已完成任务也可重开。
+- 主窗口使用无边框自定义标题栏，可拖动、双击最大化，并提供最小化、最大化/还原和关闭到托盘按钮。
 - 一张图保留一条原始记录。AI 可识别多个待办，每项分别确认、分别显示是否已添加。
 - 任务支持状态、优先级、截止/计划时间、标签、工时、进度和子任务；也可直接新建。
 - 状态、进度、工时与子任务完成数各自独立；子任务操作即时保存，关闭编辑窗口不撤销这些操作。
 
 ## 可靠性与数据保护
 
+- 数据库与附件 I/O 命令通过异步线程池（`spawn_blocking`）执行，避免阻塞主界面渲染与交互。
 - 任务、子任务和收件箱转正标记统一提交；同一原始待办重复提交返回已有任务。
-- AI 请求持久排队，同一条记录不会同时重复解析，最多两条并行。重启后恢复未完成的已请求任务；历史失败不会无条件反复重试。
+- AI 请求持久排队，同一条记录不会同时重复解析，最多两条并行。重启后恢复未完成的已请求任务；历史失败不会无条件反复重试。文本解析超时 90 秒，图片多模态解析超时 180 秒。
 - PNG/JPEG/GIF/WebP 在保存前统一校验，单图最多 4 MiB；附件缺失或损坏会明确标记解析失败。
 - 截断后恢复的 AI 结果标为“待核对”，不能视为完整识别。
 - 时间统一以带时区的时间戳保存，界面按本地时区显示。
@@ -51,12 +52,12 @@ cargo build --release --offline --locked
 cargo tauri build --ci --bundles nsis,msi -- --offline --locked
 ```
 
-如果正运行 `src-tauri/target/release/task-vault.exe`，请先从托盘退出，再覆盖构建。`v1.0.0` 本地安装器已生成：
+如果正运行 `src-tauri/target/release/task-vault.exe`，请先从托盘退出，再覆盖构建。`v1.1.0` 本地安装器已生成：
 
-- `src-tauri/target/release/bundle/nsis/TaskVault_1.0.0_x64-setup.exe`
-- `src-tauri/target/release/bundle/msi/TaskVault_1.0.0_x64_en-US.msi`
+- `src-tauri/target/release/bundle/nsis/TaskVault_1.1.0_x64-setup.exe`
+- `src-tauri/target/release/bundle/msi/TaskVault_1.1.0_x64_en-US.msi`
 
-安装包和主程序版本号已核验为 `1.0.0`，MSI 升级标识与 `v0.1.0` 一致；尚未执行实际安装测试。当前仓库未配置远程地址，本次为本地发布。
+安装包和主程序版本号已核验为 `1.1.0`，MSI 升级标识与 `v1.0.0` 一致。当前仓库未配置远程地址，本次为本地发布。
 
 前端独立预览（仅合成数据，不连接真实数据库或 AI）：
 
@@ -66,11 +67,11 @@ node scripts/preview.cjs
 
 按终端打印的回环地址访问。该服务器只允许访问明确列出的 UI 资源；操作只影响页面内存，刷新即重置。
 
-前端回归：`node ui/tests/time-format.test.js` 和 `node ui/tests/task-views.test.js`。浏览器预览不具备原生窗口控制能力，标题栏按钮会禁用；实际窗口行为由 Tauri 提供。原生窗口、托盘行为和真实 AI 服务请求尚未在目标 Windows 环境实测。
+前端回归：`node ui/tests/time-format.test.js` 和 `node ui/tests/task-views.test.js`。浏览器预览不具备原生窗口控制能力，标题栏按钮会禁用；实际窗口行为由 Tauri 提供。
 
-## 界面参考
+## 界面设计与参考
 
-v1.0.0 采用石墨灰背景、蓝紫强调色和细分隔任务行。只读调研了 [Planify](https://github.com/alainm23/planify) 和 [AppFlowy](https://github.com/AppFlowy-IO/AppFlowy)，实际视觉参考为 Planify README 的[官方深色截图](https://raw.githubusercontent.com/alainm23/planify/main/data/resources/screenshot/screenshot-03.png)：借鉴任务分组和紧凑列表的信息层次，保留本项目的记录确认流程；未复制其源码。AppFlowy README 的历史任务截图链接已失效，未将其作为视觉核验依据。
+`v1.1.0` 采用 **Sunlit Aurora & Electric Pop**（活力极光毛玻璃 + Bento 卡片）双主题设计与 **Apple Fluid Motion** 弹簧流体过渡系统，快速记录悬浮窗配备流光霓虹边框与弹性缩放动效。早期任务分组与列表信息层次曾只读参考 [Planify](https://github.com/alainm23/planify) 与 [AppFlowy](https://github.com/AppFlowy-IO/AppFlowy)，保留本项目的记录确认流程，未复制其源码。
 
 本地静态图标来自 Lucide `0.468.0`，来源及 ISC 许可见 `ui/icons/README.md`、`ui/icons/LICENSE`，运行时无需联网加载图标。
 
@@ -79,17 +80,17 @@ v1.0.0 采用石墨灰背景、蓝紫强调色和细分隔任务行。只读调�
 | 路径 | 职责 |
 |---|---|
 | `src-tauri/src/lib.rs` | 生命周期、窗口、托盘、共享状态与启动恢复 |
-| `src-tauri/src/commands.rs` | UI 命令边界 |
+| `src-tauri/src/commands.rs` | 异步 UI 命令边界（`spawn_blocking`） |
 | `src-tauri/src/db.rs` | 数据迁移、事务、加密快照、请求代次与转正幂等 |
 | `src-tauri/src/ai_queue.rs` | 有界 AI 执行、失败持久化、恢复 |
-| `src-tauri/src/deepseek.rs` | 两种 AI 协议、提示词、结果容错 |
+| `src-tauri/src/deepseek.rs` | 两种 AI 协议、提示词、多模态超时与结果容错 |
 | `src-tauri/src/storage.rs` | Windows DPAPI 与原子文件替换 |
 | `src-tauri/src/attachments.rs` | 图片输入校验、加密附件与旧文件迁移 |
 | `src-tauri/src/settings.rs` | 密钥保护、脱敏配置与地址验证 |
-| `ui/` | 深色工作台、详情、设置与快速录入 |
+| `ui/` | 日光/暗夜双主题极光 Bento 工作台、流体动效详情、设置与流光快速录入窗 |
 
 自动排期、到期提醒、时间线、跨账户导出暂未实现。
 
 ## 分支工作流
 
-`dev` 是开发主线，`main` 是稳定发布分支。本次 `v1.0.0` 变更已获授权合入本地 `dev` 与 `main`；后续合入 `main` 与发布仍需人工审批。
+`dev` 是开发主线，`main` 是稳定发布分支。本次 `v1.1.0` 变更已获授权合入本地 `dev` 与 `main`；后续合入 `main` 与发布仍需人工审批。

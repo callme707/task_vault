@@ -11,31 +11,92 @@ const listen = tauri?.event?.listen
 
 let pendingImage = null;
 let saving = false;
+let clearImgTimer = null;
+let hideWindowTimer = null;
+
+function openQuickStage() {
+  const stage = document.getElementById("quick-stage");
+  if (!stage) return;
+  if (hideWindowTimer) {
+    clearTimeout(hideWindowTimer);
+    hideWindowTimer = null;
+  }
+  stage.classList.remove("closing");
+  if (stage.classList.contains("active")) return;
+  window.requestAnimationFrame(() => {
+    stage.classList.add("active");
+  });
+}
+
+if (typeof window !== "undefined") {
+  window.__onQuickOpen = () => {
+    syncQuickTheme();
+    openQuickStage();
+  };
+  window.__onQuickClose = () => {
+    void hideQuickWindow();
+  };
+}
+
+function syncQuickTheme() {
+  let target = "light";
+  try {
+    const saved = window.localStorage?.getItem("taskvault-theme") || "light";
+    target = saved === "dark" ? "dark" : "light";
+  } catch {
+    target = "light";
+  }
+  if (document.documentElement.getAttribute("data-theme") !== target) {
+    document.documentElement.setAttribute("data-theme", target);
+  }
+}
 
 function setStatus(message, isError = false) {
   const status = document.getElementById("status");
   status.textContent = message;
-  status.style.color = isError ? "#ef767b" : "";
+  status.style.color = isError ? "#f43f5e" : "";
 }
 
 function setSaveBusy(busy) {
   const button = document.getElementById("btn-save");
   button.disabled = busy;
   button.setAttribute("aria-busy", String(busy));
-  button.textContent = busy ? "保存中…" : "保存记录";
+  button.textContent = busy ? "保存中…" : "✨ 保存记录";
 }
 
 function setImage(dataUrl) {
+  if (clearImgTimer) {
+    clearTimeout(clearImgTimer);
+    clearImgTimer = null;
+  }
   pendingImage = dataUrl;
+  const preview = document.getElementById("img-preview");
   document.getElementById("img-thumb").src = dataUrl;
-  document.getElementById("img-preview").classList.remove("hidden");
+  preview.classList.remove("hidden", "is-leaving");
   setStatus("已附加截图");
 }
 
-function clearImage() {
+function clearImage(immediate = false) {
   pendingImage = null;
-  document.getElementById("img-thumb").src = "";
-  document.getElementById("img-preview").classList.add("hidden");
+  const preview = document.getElementById("img-preview");
+  if (clearImgTimer) {
+    clearTimeout(clearImgTimer);
+    clearImgTimer = null;
+  }
+  if (immediate === true || !preview || preview.classList.contains("hidden")) {
+    document.getElementById("img-thumb").src = "";
+    preview?.classList.add("hidden");
+    preview?.classList.remove("is-leaving");
+    return;
+  }
+  preview.classList.add("is-leaving");
+  clearImgTimer = setTimeout(() => {
+    clearImgTimer = null;
+    if (pendingImage) return;
+    document.getElementById("img-thumb").src = "";
+    preview.classList.add("hidden");
+    preview.classList.remove("is-leaving");
+  }, 180);
 }
 
 async function save() {
@@ -59,9 +120,9 @@ async function save() {
       await invoke("capture_inbox", { text, source: "hotkey" });
     }
     input.value = "";
-    clearImage();
+    clearImage(true);
     setStatus("已保存");
-    await invoke("hide_window", { label: "quick" });
+    await hideQuickWindow();
   } catch (error) {
     setStatus(`保存失败：${error?.message || error}`, true);
   } finally {
@@ -80,19 +141,35 @@ function readPasteAsDataUrl(file) {
 }
 
 async function hideQuickWindow() {
+  const stage = document.getElementById("quick-stage");
+  if (stage && stage.classList.contains("active")) {
+    stage.classList.remove("active");
+    stage.classList.add("closing");
+    await new Promise((resolve) => {
+      hideWindowTimer = setTimeout(resolve, 200);
+    });
+    hideWindowTimer = null;
+  }
   try {
     await invoke("hide_window", { label: "quick" });
+    stage?.classList.remove("closing");
   } catch (error) {
+    stage?.classList.remove("closing");
+    stage?.classList.add("active");
     setStatus(`隐藏失败：${error?.message || error}`, true);
   }
 }
 
 if (typeof document !== "undefined") {
   document.addEventListener("DOMContentLoaded", () => {
+    syncQuickTheme();
+    if (!document.hidden) openQuickStage();
+    window.addEventListener("focus", syncQuickTheme);
+    window.addEventListener("storage", syncQuickTheme);
     const input = document.getElementById("task-input");
     document.getElementById("btn-save").addEventListener("click", save);
     document.getElementById("btn-cancel").addEventListener("click", hideQuickWindow);
-    document.getElementById("btn-remove-img").addEventListener("click", clearImage);
+    document.getElementById("btn-remove-img").addEventListener("click", () => clearImage(false));
     input.addEventListener("input", () => {
       if (document.getElementById("status").textContent === "先输入内容或附加一张图片") setStatus("");
     });
