@@ -125,6 +125,9 @@
   --r-md: 10px;
   --r-sm: 8px;
   --spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --apple-fluid: cubic-bezier(0.32, 0.72, 0, 1);
+  --apple-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --apple-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 
 * {
@@ -2061,9 +2064,28 @@ textarea {
   border-radius: 99px;
   background: var(--surface-solid);
   color: var(--text);
-  box-shadow: 0 16px 36px -6px rgba(15, 23, 42, 0.22);
+  box-shadow: 0 18px 40px -6px rgba(15, 23, 42, 0.24), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  backdrop-filter: blur(16px);
   font-size: 12.5px;
   font-weight: 700;
+  opacity: 0;
+  transform: translateY(18px) scale(0.92);
+  transition:
+    opacity 240ms var(--apple-fluid),
+    transform 340ms var(--apple-bounce);
+}
+
+.toast.toast-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.toast.toast-leaving {
+  opacity: 0;
+  transform: translateY(10px) scale(0.95);
+  transition:
+    opacity 180ms var(--apple-exit),
+    transform 180ms var(--apple-exit);
 }
 
 .toast.error {
@@ -2072,7 +2094,7 @@ textarea {
   color: #ffffff;
 }
 
-/* ===== 模态弹窗 ===== */
+/* ===== 模态弹窗（Apple Sheet 弹簧过渡） ===== */
 .modal {
   position: fixed;
   inset: 0;
@@ -2081,8 +2103,30 @@ textarea {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  background: rgba(15, 23, 42, 0);
+  backdrop-filter: blur(0px);
+  opacity: 0;
+  transition:
+    opacity 260ms var(--apple-fluid),
+    background-color 260ms var(--apple-fluid),
+    backdrop-filter 280ms var(--apple-fluid);
+}
+
+.modal.is-open {
   background: rgba(15, 23, 42, 0.42);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(12px);
+  opacity: 1;
+}
+
+.modal.is-closing {
+  background: rgba(15, 23, 42, 0);
+  backdrop-filter: blur(0px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 200ms var(--apple-exit),
+    background-color 200ms var(--apple-exit),
+    backdrop-filter 200ms var(--apple-exit);
 }
 
 .modal-box {
@@ -2096,6 +2140,45 @@ textarea {
   border-radius: var(--r-2xl);
   background: var(--surface-solid);
   box-shadow: var(--shadow-modal);
+  opacity: 0;
+  transform: translateY(22px) scale(0.945);
+  transform-origin: center 58%;
+  transition:
+    transform 360ms var(--spring),
+    opacity 240ms var(--apple-fluid);
+}
+
+.modal.is-open .modal-box {
+  opacity: 1;
+  transform: none;
+}
+
+.modal.is-closing .modal-box {
+  opacity: 0;
+  transform: translateY(14px) scale(0.965);
+  transition:
+    transform 200ms var(--apple-exit),
+    opacity 180ms var(--apple-exit);
+}
+
+.modal.is-open .modal-head {
+  animation: appleLayerReveal 340ms var(--spring) 20ms both;
+}
+
+.modal.is-open .modal-section:nth-child(1) {
+  animation: appleLayerReveal 360ms var(--spring) 55ms both;
+}
+
+.modal.is-open .modal-section:nth-child(2) {
+  animation: appleLayerReveal 360ms var(--spring) 95ms both;
+}
+
+.modal.is-open .modal-section:nth-child(3) {
+  animation: appleLayerReveal 360ms var(--spring) 135ms both;
+}
+
+.modal.is-open .modal-foot {
+  animation: appleLayerReveal 360ms var(--spring) 110ms both;
 }
 
 .task-box {
@@ -2255,6 +2338,283 @@ textarea {
 
 .modal-foot .btn {
   min-width: 100px;
+}
+
+/* ===== Apple Fluid Motion · 次级界面与交互弹簧动画系统 ===== */
+@keyframes appleLayerReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes appleCardEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes appleViewEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.992);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes appleTitleSwitch {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes appleInspectorCardIn {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.982);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes appleItemSwitch {
+  0% {
+    opacity: 0.35;
+    transform: translateY(7px) scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes appleEmptyReveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.965) translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes appleChipPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.88) translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes appleValuePop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.16);
+    color: var(--accent);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 1. 主视图切换与顶栏标题流体过渡 */
+.view.view-entering {
+  animation: appleViewEnter 340ms var(--spring) both;
+}
+
+.topbar-titles.title-switching {
+  animation: appleTitleSwitch 280ms var(--spring) both;
+}
+
+.value-pop {
+  display: inline-block;
+  animation: appleValuePop 340ms var(--apple-bounce);
+}
+
+/* 2. 右侧 AI 审阅与转化台（次级面板分层弹簧级联） */
+#detail-content.inspector-entering .raw-card {
+  animation: appleInspectorCardIn 340ms var(--spring) 0ms both;
+}
+
+#detail-content.inspector-entering .ai-card {
+  animation: appleInspectorCardIn 360ms var(--spring) 48ms both;
+}
+
+#detail-content.inspector-entering .draft-card {
+  animation: appleInspectorCardIn 380ms var(--spring) 96ms both;
+}
+
+#detail-content.is-closing {
+  opacity: 0;
+  transform: translateY(10px) scale(0.984);
+  filter: blur(4px);
+  pointer-events: none;
+  transition:
+    opacity 180ms var(--apple-exit),
+    transform 180ms var(--apple-exit),
+    filter 180ms var(--apple-exit);
+}
+
+#detail-empty.empty-entering {
+  animation: appleEmptyReveal 340ms var(--spring) both;
+}
+
+#detail-empty.empty-entering .empty-halo {
+  animation: appleChipPop 420ms var(--apple-bounce) 40ms both;
+}
+
+#detail-empty.empty-entering .empty-flow .flow-step:nth-of-type(1) {
+  animation: appleChipPop 340ms var(--spring) 60ms both;
+}
+
+#detail-empty.empty-entering .empty-flow .flow-step:nth-of-type(2) {
+  animation: appleChipPop 340ms var(--spring) 110ms both;
+}
+
+#detail-empty.empty-entering .empty-flow .flow-step:nth-of-type(3) {
+  animation: appleChipPop 340ms var(--spring) 160ms both;
+}
+
+.inspector-card.item-switching {
+  animation: appleItemSwitch 260ms var(--spring) both;
+}
+
+.detail-image img {
+  opacity: 0;
+  transform: scale(0.975);
+  filter: blur(5px);
+  transition:
+    opacity 280ms var(--apple-fluid),
+    transform 340ms var(--spring),
+    filter 280ms var(--apple-fluid);
+}
+
+.detail-image img.is-loaded {
+  opacity: 1;
+  transform: scale(1);
+  filter: blur(0);
+}
+
+.ai-chip {
+  animation: appleChipPop 280ms var(--apple-bounce) both;
+  animation-delay: calc(var(--chip-i, 0) * 28ms);
+}
+
+/* 3. 任务卡与记录流卡片：交错入场、按压阻尼与状态流转动画 */
+.inbox-row.card-enter,
+.task.card-enter {
+  animation: appleCardEnter 380ms var(--spring) both;
+  animation-delay: calc(var(--i, 0) * 30ms);
+}
+
+.inbox-row:active,
+.task:active:not(:has(button:active, select:active, input:active, label:active)) {
+  transform: scale(0.99);
+  transition-duration: 90ms;
+}
+
+.task.card-acting-done {
+  border-color: var(--ok-line) !important;
+  background: linear-gradient(90deg, var(--ok-soft), var(--surface-solid) 60%) !important;
+  transform: translateX(14px) scale(0.975) !important;
+  opacity: 0.15 !important;
+  filter: blur(2px);
+  pointer-events: none;
+  transition:
+    transform 210ms var(--apple-fluid),
+    opacity 200ms var(--apple-fluid),
+    filter 200ms var(--apple-fluid),
+    background 150ms ease !important;
+}
+
+.task.card-acting-start,
+.task.card-acting-reopen {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-card-hover) !important;
+  transform: scale(1.012) !important;
+  transition: transform 160ms var(--apple-bounce), box-shadow 160ms ease !important;
+}
+
+.task.card-acting-archive,
+.task.card-acting-unarchive {
+  transform: translateY(-10px) scale(0.965) !important;
+  opacity: 0 !important;
+  filter: blur(3px);
+  pointer-events: none;
+  transition:
+    transform 200ms var(--apple-exit),
+    opacity 190ms var(--apple-exit),
+    filter 190ms var(--apple-exit) !important;
+}
+
+.task.card-acting-delete,
+.inbox-row.card-acting-delete {
+  border-color: var(--danger-line) !important;
+  background: var(--danger-soft) !important;
+  transform: scale(0.94) !important;
+  opacity: 0 !important;
+  filter: blur(4px);
+  pointer-events: none;
+  transition:
+    transform 200ms var(--apple-exit),
+    opacity 190ms var(--apple-exit),
+    filter 190ms var(--apple-exit) !important;
+}
+
+.progress-bar {
+  transition: width 420ms var(--spring);
+}
+
+/* 4. 子任务列表与空状态过渡 */
+.subtask {
+  transition:
+    transform 220ms var(--spring),
+    opacity 200ms var(--apple-fluid),
+    background-color 180ms ease,
+    border-color 180ms ease;
+  animation: appleLayerReveal 260ms var(--spring) both;
+  animation-delay: calc(var(--sub-i, 0) * 24ms);
+}
+
+.subtask:hover {
+  border-color: var(--accent-line);
+  transform: translateX(2px);
+}
+
+.subtask.is-removing {
+  opacity: 0;
+  transform: translateX(-12px) scale(0.96);
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.empty {
+  animation: appleEmptyReveal 320ms var(--spring) both;
 }
 
 /* ===== 响应式与紧凑窗口适配 ===== */
