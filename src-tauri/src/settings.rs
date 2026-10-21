@@ -22,6 +22,19 @@ pub const DEFAULT_BASE_URL: &str = "https://api.deepseek.com";
 pub const DEFAULT_QUICK_HOTKEY: &str = "Ctrl+Alt+Q";
 pub const DEFAULT_MAIN_HOTKEY: &str = "Ctrl+Alt+W";
 pub const REDACTED_API_KEY: &str = "********";
+pub const PERSONA_AUTO: &str = "auto";
+pub const PERSONA_DEV: &str = "dev";
+pub const PERSONA_PM: &str = "pm";
+pub const PERSONA_GTD: &str = "gtd";
+
+pub fn normalize_persona(raw: &str) -> &'static str {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        PERSONA_DEV => PERSONA_DEV,
+        PERSONA_PM => PERSONA_PM,
+        PERSONA_GTD => PERSONA_GTD,
+        _ => PERSONA_AUTO,
+    }
+}
 
 /// In-memory settings.  `api_key` is intentionally skipped by serde so an
 /// accidental serialization of this runtime object cannot expose the secret.
@@ -53,6 +66,8 @@ pub struct Settings {
     pub quick_hotkey: String,
     #[serde(default = "default_main_hotkey")]
     pub main_hotkey: String,
+    #[serde(default = "default_persona")]
+    pub default_persona: String,
 }
 
 fn default_provider() -> String {
@@ -75,6 +90,10 @@ fn default_quick_hotkey() -> String {
     DEFAULT_QUICK_HOTKEY.to_string()
 }
 
+fn default_persona() -> String {
+    PERSONA_AUTO.to_string()
+}
+
 fn default_main_hotkey() -> String {
     DEFAULT_MAIN_HOTKEY.to_string()
 }
@@ -92,6 +111,7 @@ impl Default for Settings {
             autostart: false,
             quick_hotkey: DEFAULT_QUICK_HOTKEY.to_string(),
             main_hotkey: DEFAULT_MAIN_HOTKEY.to_string(),
+            default_persona: PERSONA_AUTO.to_string(),
         }
     }
 }
@@ -111,6 +131,8 @@ pub struct SettingsView {
     pub autostart: bool,
     pub quick_hotkey: String,
     pub main_hotkey: String,
+    #[serde(default = "default_persona")]
+    pub default_persona: String,
 }
 
 /// Settings received from the UI.  The key is optional so an omitted or empty
@@ -139,6 +161,8 @@ pub struct SettingsUpdate {
     pub quick_hotkey: String,
     #[serde(default = "default_main_hotkey")]
     pub main_hotkey: String,
+    #[serde(default = "default_persona")]
+    pub default_persona: String,
 }
 
 impl Settings {
@@ -243,6 +267,7 @@ impl Settings {
             autostart: self.autostart,
             quick_hotkey: self.quick_hotkey.clone(),
             main_hotkey: self.main_hotkey.clone(),
+            default_persona: normalize_persona(&self.default_persona).to_string(),
         }
     }
 
@@ -318,6 +343,7 @@ impl SettingsUpdate {
             autostart: settings.autostart,
             quick_hotkey: settings.quick_hotkey.clone(),
             main_hotkey: settings.main_hotkey.clone(),
+            default_persona: normalize_persona(&settings.default_persona).to_string(),
         }
     }
 
@@ -348,6 +374,7 @@ impl SettingsUpdate {
         next.autostart = self.autostart;
         next.quick_hotkey = self.quick_hotkey.clone();
         next.main_hotkey = self.main_hotkey.clone();
+        next.default_persona = normalize_persona(&self.default_persona).to_string();
         next.validate()?;
 
         // A saved key belongs to the provider and service origin it was
@@ -469,6 +496,8 @@ struct PersistedSettings {
     quick_hotkey: String,
     #[serde(default = "default_main_hotkey")]
     main_hotkey: String,
+    #[serde(default = "default_persona")]
+    default_persona: String,
 }
 
 impl PersistedSettings {
@@ -491,6 +520,7 @@ impl PersistedSettings {
             autostart: settings.autostart,
             quick_hotkey: settings.quick_hotkey.clone(),
             main_hotkey: settings.main_hotkey.clone(),
+            default_persona: normalize_persona(&settings.default_persona).to_string(),
         })
     }
 
@@ -523,6 +553,7 @@ impl PersistedSettings {
                 autostart: self.autostart,
                 quick_hotkey: self.quick_hotkey,
                 main_hotkey: self.main_hotkey,
+                default_persona: normalize_persona(&self.default_persona).to_string(),
             },
             has_legacy_key,
         ))

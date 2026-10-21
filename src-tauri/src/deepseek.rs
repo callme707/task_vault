@@ -2,11 +2,23 @@ use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine as _;
 use std::time::Duration;
 
-use chrono::Local;
+use chrono::{Datelike, Duration as ChronoDuration, Local, Weekday};
 use serde_json::{json, Value};
 
 use crate::models::AiParsed;
-use crate::settings::{Settings, PROVIDER_ANTHROPIC};
+use crate::settings::{
+    normalize_persona, Settings, PERSONA_AUTO, PERSONA_DEV, PERSONA_GTD, PERSONA_PM,
+    PROVIDER_ANTHROPIC,
+};
+
+#[derive(Debug, Clone, Default)]
+pub struct ParseContext {
+    /// Requested expert persona ("auto" | "dev" | "pm" | "gtd").
+    /// Empty falls back to `settings.default_persona`.
+    pub persona: String,
+    /// Existing high-frequency task tags from the user's database.
+    pub existing_tags: Vec<String>,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum AiError {
@@ -143,44 +155,224 @@ const IMAGE_SYSTEM_PROMPT: &str = r#"你的回复会被程序直接解析，硬�
 
 识别要求：图中每个独立待办各占一项，聊天记录里不同人认领的事拆开；不要遗漏、不要臆造；没有可行动内容时 items 返回空数组。"#;
 
-fn now_line() -> String {
-    Local::now()
-        .format("当前时间：%Y-%m-%d %H:%M:%S %A")
-        .to_string()
+fn persona_directive(persona: &str) -> &'static str {
+    match normalize_persona(persona) {
+        PERSONA_DEV => {
+            r#"【专家视角锁定：💻 资深研发与系统架构专家（JSON 首个字段 "persona" 固定填 "dev"）】
+请以资深工程师与架构师视角审视并拆解：
+- description：提炼为精准的技术执行目标（保留系统名、模块、接口、错误码或环境上下文）。
+- subtasks：按工程闭环拆解 2-5 条具体步骤（如：1.复现与日志/监控定位 2.根因修复或接口/库表实现 3.联调与边界自测 4.上线验证与回滚预案）。
+- missing_info：敏锐指出影响研发落地的缺失信息（如：复现环境、报错时间段/TraceID、接口契约、上线窗口）。
+- estimate_minutes：按实际排障/开发+测试工作量合理预估。"#
+        }
+        PERSONA_PM => {
+            r#"【专家视角锁定：📋 资深产品与敏捷项目专家（JSON 首个字段 "persona" 固定填 "pm"）】
+请以产品经理与项目推进专家视角审视并拆解：
+- description：提炼清晰的业务背景、目标价值与交付范围。
+- subtasks：按项目推进闭环拆解 2-5 条具体步骤（如：1.明确需求边界与业务规则 2.对齐设计/研发方案与排期 3.明确验收标准(DoD)并跟进联调 4.上线验收与干系人同步）。
+- missing_info：敏锐指出影响交付的缺失信息（如：具体负责人、明确截止节点、验收口径、跨部门依赖）。
+- estimate_minutes：按方案梳理、沟通对齐与验收全流程合理预估。"#
+        }
+        PERSONA_GTD => {
+            r#"【专家视角锁定：🎯 GTD 个人效率与行动拆解教练（JSON 首个字段 "persona" 固定填 "gtd"）】
+请按 GTD（Getting Things Done）“最小下一步物理行动”原则审视并拆解：
+- description：消除模糊焦虑，用一句具体、可视化的行动结果描述任务。
+- subtasks：严禁使用“跟进、处理、研究一下”等笼统动词，拆解为 2-4 个在 15-30 分钟内即可低阻力启动的具体物理动作（Next Action）。
+- missing_info：指出阻碍立即行动的前置条件（如：待确认人、缺失资料、具体时间窗）。"#
+        }
+        _ => {
+            r#"【第一阶段：Jev 风格 System-1 前置路由决策（必须在 JSON 第一个字段 "persona" 中输出路由结果）】
+请先根据记录语境快速选择最匹配的垂直专家身份（"persona" 字段只允许填 "dev"、"pm" 或 "gtd" 三者之一，严禁填 "auto"）：
+- "dev"（研发与架构专家）：涉及代码开发、Bug 报错、接口联调、数据库、部署运维、性能优化或技术方案。
+- "pm"（产品与项目专家）：涉及需求评审、功能规划、排期节点、跨团队协同、客户反馈或项目推进。
+- "gtd"（GTD 行动教练）：涉及日常事务、学习阅读、个人计划、行政报销或模糊灵感拆解。
+选定 "persona" 后，立即按对应专家准则生成后续字段：
+- 若为 "dev"：subtasks 按「复现与日志定位 → 修复/接口实现 → 联调自测 → 上线验证」拆解，missing_info 追问复现环境/日志/接口依赖。
+- 若为 "pm"：subtasks 按「需求边界确认 → 方案与排期对齐 → 验收标准(DoD) → 交付同步」拆解，missing_info 追问负责人/截止节点/验收口径。
+- 若为 "gtd"：消除笼统动词，subtasks 拆解为 15-30 分钟可立即启动的最小物理动作（Next Action）。"#
+        }
+    }
 }
 
-fn user_prompt(raw_text: &str) -> String {
+const IMAGE_SCHEMA_ADDON: &str = r#"补充字段与拆解要求：
+- 每个待办对象首个字段输出 "persona"（"dev" | "pm" | "gtd"），代表该待办匹配的专家视角。
+- 每个待办对象支持可选字段 "subtasks"（按所选专家视角拆解 2-4 条简短可执行子步骤；简单单步待办可省略）与 "missing_info"（关键缺失信息数组；无缺失可省略）。"#;
+
+pub fn system_prompt_for(persona: &str, with_image: bool) -> String {
+    let directive = persona_directive(persona);
+    if with_image {
+        format!("{IMAGE_SYSTEM_PROMPT}\n\n{IMAGE_SCHEMA_ADDON}\n\n{directive}")
+    } else {
+        format!(
+            "{SYSTEM_PROMPT}\n\n13. persona: 放在 JSON 首个字段，取值为 \"dev\" / \"pm\" / \"gtd\"。\n\n{directive}"
+        )
+    }
+}
+
+fn weekday_cn(wd: Weekday) -> &'static str {
+    match wd {
+        Weekday::Mon => "周一",
+        Weekday::Tue => "周二",
+        Weekday::Wed => "周三",
+        Weekday::Thu => "周四",
+        Weekday::Fri => "周五",
+        Weekday::Sat => "周六",
+        Weekday::Sun => "周日",
+    }
+}
+
+fn weekday_short(wd: Weekday) -> &'static str {
+    match wd {
+        Weekday::Mon => "一",
+        Weekday::Tue => "二",
+        Weekday::Wed => "三",
+        Weekday::Thu => "四",
+        Weekday::Fri => "五",
+        Weekday::Sat => "六",
+        Weekday::Sun => "日",
+    }
+}
+
+pub fn format_calendar_context(now: chrono::DateTime<Local>) -> String {
+    let today_wd = now.weekday().num_days_from_monday() as i64;
+    let mut anchors = Vec::with_capacity(10);
+    for offset in 0..10i64 {
+        let target = now + ChronoDuration::days(offset);
+        let wd = target.weekday();
+        let date_str = target.format("%Y-%m-%d").to_string();
+        let label = match offset {
+            0 => format!("今天({})", weekday_cn(wd)),
+            1 => format!("明天({})", weekday_cn(wd)),
+            2 => format!("后天({})", weekday_cn(wd)),
+            _ if today_wd + offset <= 6 => format!("本周{}", weekday_short(wd)),
+            _ if today_wd + offset <= 13 => format!("下周{}", weekday_short(wd)),
+            _ => weekday_cn(wd).to_string(),
+        };
+        anchors.push(format!("{label}={date_str}"));
+    }
     format!(
-        "{}\n\n请整理下面这条记录（原始文本不要改写，只在输出 JSON 中结构化它）：\n\n{raw_text}",
-        now_line()
+        "当前时间：{} {}\n相对日期速查（推算“明天/周五/下周”等 deadline 请直接查表）：{}",
+        now.format("%Y-%m-%d %H:%M:%S"),
+        weekday_cn(now.weekday()),
+        anchors.join(", ")
     )
 }
 
-fn image_user_prompt(raw_text: &str) -> String {
+fn tags_context_line(existing_tags: &[String]) -> String {
+    let cleaned: Vec<String> = existing_tags
+        .iter()
+        .map(|t| t.trim())
+        .filter(|t| !t.is_empty())
+        .take(20)
+        .map(ToOwned::to_owned)
+        .collect();
+    if cleaned.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "\n已有常用标签库（生成 tags 时请优先复用以下匹配标签，仅在无合适标签时新增短标签）：{}",
+            cleaned.join("、")
+        )
+    }
+}
+
+fn finalize_persona(mut parsed: AiParsed, requested_persona: &str) -> AiParsed {
+    let req = normalize_persona(requested_persona);
+    let fallback = if req == PERSONA_AUTO {
+        PERSONA_GTD
+    } else {
+        req
+    };
+    let normalize_item_persona = |raw: &str, kind: &str| -> String {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            PERSONA_DEV => PERSONA_DEV.to_string(),
+            PERSONA_PM => PERSONA_PM.to_string(),
+            PERSONA_GTD => PERSONA_GTD.to_string(),
+            _ if req != PERSONA_AUTO => req.to_string(),
+            _ if kind.eq_ignore_ascii_case("requirement") => PERSONA_PM.to_string(),
+            _ => fallback.to_string(),
+        }
+    };
+    parsed.persona = normalize_item_persona(&parsed.persona, &parsed.kind);
+    for item in &mut parsed.items {
+        item.persona = normalize_item_persona(&item.persona, &item.kind);
+    }
+    parsed
+}
+
+fn now_line() -> String {
+    format_calendar_context(Local::now())
+}
+
+fn user_prompt(raw_text: &str, existing_tags: &[String]) -> String {
+    format!(
+        "{}{}\n\n请整理下面这条记录（原始文本不要改写，只在输出 JSON 中结构化它）：\n\n{raw_text}",
+        now_line(),
+        tags_context_line(existing_tags)
+    )
+}
+
+fn image_user_prompt(raw_text: &str, existing_tags: &[String]) -> String {
     let note = raw_text.trim();
     let note = if note.is_empty() { "（无）" } else { note };
     format!(
-        "{}\n\n用户附言：{note}\n\n请识别并整理这张图片中的所有待办事项。",
-        now_line()
+        "{}{}\n\n用户附言：{note}\n\n请识别并整理这张图片中的所有待办事项。",
+        now_line(),
+        tags_context_line(existing_tags)
     )
 }
 
 /// 按设置的协议分发到对应实现。带图片时走视觉模型（settings.vision_model，缺省用主模型）。
+#[cfg(test)]
 pub async fn parse_inbox_text(
     client: &reqwest::Client,
     settings: &Settings,
     raw_text: &str,
     image: Option<&ImageInput>,
 ) -> Result<AiParsed, AiError> {
+    parse_inbox_text_with_context(client, settings, raw_text, image, &ParseContext::default()).await
+}
+
+pub async fn parse_inbox_text_with_context(
+    client: &reqwest::Client,
+    settings: &Settings,
+    raw_text: &str,
+    image: Option<&ImageInput>,
+    ctx: &ParseContext,
+) -> Result<AiParsed, AiError> {
     if !settings.api_ready() {
         return Err(AiError::NoApiKey);
     }
-    let api_key = settings.effective_api_key().unwrap_or_default();
-    if settings.provider() == PROVIDER_ANTHROPIC {
-        parse_with_anthropic(client, settings, &api_key, raw_text, image).await
+    let effective_persona = if ctx.persona.trim().is_empty() {
+        normalize_persona(&settings.default_persona)
     } else {
-        parse_with_openai(client, settings, &api_key, raw_text, image).await
-    }
+        normalize_persona(&ctx.persona)
+    };
+    let api_key = settings.effective_api_key().unwrap_or_default();
+    let parsed = if settings.provider() == PROVIDER_ANTHROPIC {
+        parse_with_anthropic(
+            client,
+            settings,
+            &api_key,
+            raw_text,
+            image,
+            effective_persona,
+            &ctx.existing_tags,
+        )
+        .await?
+    } else {
+        parse_with_openai(
+            client,
+            settings,
+            &api_key,
+            raw_text,
+            image,
+            effective_persona,
+            &ctx.existing_tags,
+        )
+        .await?
+    };
+    Ok(finalize_persona(parsed, effective_persona))
 }
 
 /// OpenAI Chat Completions 兼容协议（DeepSeek、Kimi、Qwen、GLM、Ollama 网关等）。
@@ -191,19 +383,17 @@ async fn parse_with_openai(
     api_key: &str,
     raw_text: &str,
     image: Option<&ImageInput>,
+    persona: &str,
+    existing_tags: &[String],
 ) -> Result<AiParsed, AiError> {
     let with_image = image.is_some();
-    let system = if with_image {
-        IMAGE_SYSTEM_PROMPT
-    } else {
-        SYSTEM_PROMPT
-    };
+    let system = system_prompt_for(persona, with_image);
     let user_content = match image {
         Some(img) => json!([
-            {"type": "text", "text": image_user_prompt(raw_text)},
+            {"type": "text", "text": image_user_prompt(raw_text, existing_tags)},
             {"type": "image_url", "image_url": {"url": format!("data:{};base64,{}", img.mime, img.data)}}
         ]),
-        None => json!(user_prompt(raw_text)),
+        None => json!(user_prompt(raw_text, existing_tags)),
     };
 
     // 文本模式用 max_tokens（DeepSeek 等传统兼容栈）；图片模式按 MiMo 等新栈
@@ -266,19 +456,17 @@ async fn parse_with_anthropic(
     api_key: &str,
     raw_text: &str,
     image: Option<&ImageInput>,
+    persona: &str,
+    existing_tags: &[String],
 ) -> Result<AiParsed, AiError> {
     let with_image = image.is_some();
-    let system = if with_image {
-        IMAGE_SYSTEM_PROMPT
-    } else {
-        SYSTEM_PROMPT
-    };
+    let system = system_prompt_for(persona, with_image);
     let user_content = match image {
         Some(img) => json!([
             {"type": "image", "source": {"type": "base64", "media_type": img.mime, "data": img.data}},
-            {"type": "text", "text": image_user_prompt(raw_text)}
+            {"type": "text", "text": image_user_prompt(raw_text, existing_tags)}
         ]),
-        None => json!(user_prompt(raw_text)),
+        None => json!(user_prompt(raw_text, existing_tags)),
     };
 
     let body = json!({
@@ -687,5 +875,31 @@ mod tests {
         assert!(matches!(error, AiError::Http(401)));
         assert!(!error.to_string().contains("fixture-private-response"));
         server.join().unwrap();
+    }
+
+    #[test]
+    fn persona_routing_calendar_and_tag_context_work() {
+        let auto_prompt = system_prompt_for("auto", false);
+        assert!(auto_prompt.contains("Jev 风格 System-1 前置路由决策"));
+        let dev_img_prompt = system_prompt_for("dev", true);
+        assert!(dev_img_prompt.contains("资深研发与系统架构专家"));
+        assert!(dev_img_prompt.contains("subtasks"));
+
+        let cal = format_calendar_context(Local::now());
+        assert!(cal.contains("今天("));
+        assert!(cal.contains("明天("));
+        assert!(cal.contains("后天("));
+
+        let tags_line = tags_context_line(&["后端".into(), "OA".into()]);
+        assert!(tags_line.contains("后端、OA"));
+
+        let finalized = finalize_persona(
+            AiParsed {
+                title: "排查网关 502".into(),
+                ..Default::default()
+            },
+            "dev",
+        );
+        assert_eq!(finalized.persona, "dev");
     }
 }

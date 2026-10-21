@@ -44,6 +44,26 @@
           <span id="status" role="status" aria-live="polite"></span>
         </div>
         <div class="action-buttons">
+          <div id="quick-persona-wrap" class="quick-persona-wrap">
+            <select id="quick-persona" class="sr-only" tabindex="-1" aria-hidden="true">
+              <option value="">🤖 默认视角</option>
+              <option value="auto">🤖 智能自适应</option>
+              <option value="dev">💻 研发专家</option>
+              <option value="pm">📋 产品项目</option>
+              <option value="gtd">🎯 GTD 行动</option>
+            </select>
+            <button id="quick-persona-btn" class="quick-persona-btn" type="button" aria-haspopup="listbox" aria-expanded="false" title="按需指定本条记录的 AI 专家拆解视角">
+              <span id="quick-persona-label">🤖 默认视角</span>
+              <span class="quick-persona-caret" aria-hidden="true">▾</span>
+            </button>
+            <div id="quick-persona-menu" class="quick-persona-menu hidden" role="listbox" aria-label="解析专家身份">
+              <button type="button" class="quick-persona-opt active" role="option" aria-selected="true" data-value="">🤖 默认视角</button>
+              <button type="button" class="quick-persona-opt" role="option" aria-selected="false" data-value="auto">🤖 智能自适应</button>
+              <button type="button" class="quick-persona-opt" role="option" aria-selected="false" data-value="dev">💻 研发专家</button>
+              <button type="button" class="quick-persona-opt" role="option" aria-selected="false" data-value="pm">📋 产品项目</button>
+              <button type="button" class="quick-persona-opt" role="option" aria-selected="false" data-value="gtd">🎯 GTD 行动</button>
+            </div>
+          </div>
           <button id="btn-cancel" class="btn" type="button">隐藏</button>
           <button id="btn-save" class="btn primary" type="button">✨ 保存记录</button>
         </div>

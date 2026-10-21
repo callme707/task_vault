@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.2.0] - 2026-10-21
+
+TaskVault `v1.2.0` 智能解析增强与开源文档升级版本，基于提交 `e71b89d`。本版本引入 Jev 风格 System-1 前置决策槽与专家身份路由体系，并补充高频标签库注入、多模态图片子任务拆解、相对时间日历锚点及中英双语开源文档。
+
+### 新增与改进
+
+- **Jev 风格前置决策槽与专家身份路由（`250e033`）**：
+  - 在 `AiParsed` 首字段引入 `persona`（`dev` / `pm` / `gtd`），默认 `🤖 智能自适应 (auto)` 模式下在单次请求首个 JSON 字段先完成角色路由决策，自动激活对应专家视角的子任务拆解与缺失信息追问准则。
+  - 支持在「AI 与偏好设置」中配置全局默认专家身份（`default_persona`），在 `Ctrl+Alt+Q` 快速记录悬浮窗中按需单条指定视角（采用贴合日光/暗夜双主题的自定义上弹流光面板 `7d48b3b`），以及在右侧 AI 审阅台中查看决策视角徽章并切换专家身份重新解析。
+- **高频标签库上下文注入（`250e033`）**：
+  - 新增 `Db::top_task_tags` 提取正式任务库 Top 20 高频标签并注入解析上下文，引导模型优先复用既有标签分类，防止同义标签碎片化。
+- **多模态图片子任务拆解与相对日历锚点（`250e033`）**：
+  - 图片多模态解析新增 `persona`、`subtasks`（2–4 步可执行动作）与 `missing_info` 字段支持。
+  - 时间上下文新增未来 10 天 `今天 / 明天 / 后天 / 本周X / 下周X = yyyy-MM-dd` 相对日期速查表，提升口语化截止时间推算准确率。
+- **中英双语开源文档与实机演示资产（`a0ff73a` / `9149fee`）**：
+  - 新增标准开源风格的中文默认文档 [README.md](README.md) 与英文文档 [README_EN.md](README_EN.md)，附带实机运行工作流 GIF 与高清界面截图（`docs/screenshots/`）。
+
+### 构建输出路径
+
+`v1.2.0` 已通过 Tauri 发布构建，生成以下本地可执行文件与安装器：
+
+- `src-tauri/target/release/task-vault.exe`
+- `src-tauri/target/release/bundle/nsis/TaskVault_1.2.0_x64-setup.exe`
+- `src-tauri/target/release/bundle/msi/TaskVault_1.2.0_x64_en-US.msi`
+
+---
+
 ## [1.1.0] - 2026-10-21
 
 TaskVault `v1.1.0` 特性与体验升级版本，基于提交 `cc56a12`。本版本完成后端数据库与附件命令全异步化改造、多模态大图超时调优，并将主界面与快速记录窗升级为“活力极光毛玻璃（Sunlit Aurora & Electric Pop）+ Bento 卡片 + Apple Fluid Motion 流体动效”视觉体系。

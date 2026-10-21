@@ -64,6 +64,13 @@ const kindText = {
   note: "记录",
 };
 
+const personaText = {
+  auto: "🤖 智能路由",
+  dev: "💻 研发专家",
+  pm: "📋 产品项目",
+  gtd: "🎯 GTD 行动",
+};
+
 const taskViews = ["active", "completed", "archived"];
 
 function isTaskArchived(task) {
@@ -941,6 +948,10 @@ function renderAiSummary(item, ai, items) {
   const activeAi = items[state.selectedItemIndex] || ai;
   if (chipsBox && activeAi) {
     const rawChips = [];
+    const routedPersona = activeAi.persona || ai.persona;
+    if (routedPersona && personaText[routedPersona]) {
+      rawChips.push({ cls: "persona", html: `决策视角 <strong>${esc(personaText[routedPersona])}</strong>` });
+    }
     if (activeAi.kind) rawChips.push({ cls: "", html: `类型 <strong>${esc(kindText[activeAi.kind] || activeAi.kind)}</strong>` });
     if (activeAi.priority) rawChips.push({ cls: "", html: `优先级 <strong>${esc(activeAi.priority)}</strong>` });
     if (typeof activeAi.confidence === "number" && activeAi.confidence > 0) {
@@ -964,8 +975,11 @@ function renderAiSummary(item, ai, items) {
   if (items.length > 1 || hasAiItemList(item)) {
     lines.push(`图片中识别出 ${items.length} 个待办，可在下方切换并逐项转为正式任务。`);
     if (ai.summary) lines.push(`图片概述：${ai.summary}`);
+    if (safeArray(activeAi?.subtasks).length) lines.push(`当前项子任务：${activeAi.subtasks.join("；")}`);
+    if (safeArray(activeAi?.missing_info).length) lines.push(`当前项待补充：${activeAi.missing_info.join("；")}`);
   } else {
-    lines.push(`类型：${ai.kind || "-"}　优先级：${ai.priority || "-"}　把握：${ai.confidence ?? "-"}`);
+    const personaLabel = personaText[ai.persona] ? `　视角：${personaText[ai.persona]}` : "";
+    lines.push(`类型：${ai.kind || "-"}　优先级：${ai.priority || "-"}　把握：${ai.confidence ?? "-"}${personaLabel}`);
     if (ai.summary) lines.push(`总结：${ai.summary}`);
     if (ai.deadline) lines.push(`截止：${formatDateTime(ai.deadline)}`);
     if (ai.estimate_minutes) lines.push(`预估：${ai.estimate_minutes} 分钟`);
@@ -1058,6 +1072,13 @@ async function renderDetail(id) {
     state.selectedItemIndex = 0;
   }
   const currentAi = items[state.selectedItemIndex] || ai;
+  const reparsePersonaEl = document.getElementById("reparse-persona");
+  if (reparsePersonaEl && document.activeElement !== reparsePersonaEl) {
+    const detected = currentAi?.persona || ai?.persona;
+    reparsePersonaEl.value = detected && personaText[detected]
+      ? detected
+      : (currentSettings?.default_persona || "auto");
+  }
   fillDraftFromItem(currentAi, item, state.selectedItemIndex);
   updatePromotionUi(item, state.selectedItemIndex);
 }
@@ -1412,6 +1433,8 @@ async function loadSettings() {
   document.getElementById("s-base-url").value = settings.base_url || "";
   document.getElementById("s-model").value = settings.model || "";
   document.getElementById("s-vision-model").value = settings.vision_model || "";
+  const personaSelect = document.getElementById("s-default-persona");
+  if (personaSelect) personaSelect.value = settings.default_persona || "auto";
   document.getElementById("s-disable-reasoning").checked = settings.disable_reasoning !== false;
   document.getElementById("s-auto-parse").checked = !!settings.auto_parse;
   document.getElementById("s-autostart").checked = !!settings.autostart;
@@ -1437,6 +1460,7 @@ async function saveSettings() {
       base_url: document.getElementById("s-base-url").value.trim() || "https://api.deepseek.com",
       model: document.getElementById("s-model").value.trim() || "deepseek-v4-flash",
       vision_model: document.getElementById("s-vision-model").value.trim() || null,
+      default_persona: document.getElementById("s-default-persona")?.value || "auto",
       disable_reasoning: document.getElementById("s-disable-reasoning").checked,
       auto_parse: document.getElementById("s-auto-parse").checked,
       autostart: document.getElementById("s-autostart").checked,
@@ -1450,6 +1474,7 @@ async function saveSettings() {
         base_url: settings.base_url,
         model: settings.model,
         vision_model: settings.vision_model,
+        default_persona: settings.default_persona,
         disable_reasoning: settings.disable_reasoning,
         auto_parse: settings.auto_parse,
         autostart: settings.autostart,
@@ -1656,10 +1681,11 @@ async function init() {
   document.getElementById("btn-reparse").addEventListener("click", async () => {
     const item = selectedInboxItem();
     if (!item) return;
+    const persona = document.getElementById("reparse-persona")?.value || "auto";
     await runBusy(`reparse:${item.id}`, async () => {
       try {
-        await invoke("parse_inbox_item", { id: item.id });
-        showToast("已重新加入解析队列");
+        await invoke("parse_inbox_item", { id: item.id, persona });
+        showToast(`已按「${personaText[persona] || "智能路由"}」重新加入解析队列`);
         await refreshAll();
       } catch (error) {
         showError(`重新解析失败：${errorText(error)}`);
