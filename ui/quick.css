@@ -46,7 +46,7 @@ body {
   width: 100%;
   height: 100%;
   margin: 0;
-  background: var(--bg);
+  background: transparent;
 }
 
 body {
@@ -86,20 +86,121 @@ textarea:focus-visible {
   border: 0;
 }
 
-.quick-card {
+/* ===== 科技流光弹出层舞台（参考 bootstrapmb 16099） ===== */
+.quick-stage {
   position: relative;
   display: flex;
   width: 100vw;
   height: 100vh;
+  padding: 20px;
+  align-items: stretch;
+  justify-content: stretch;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 280ms ease, visibility 280ms ease;
+}
+
+.quick-stage.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.quick-stage.closing {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 200ms ease, visibility 200ms ease;
+}
+
+.quick-card {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  width: 100%;
+  height: 100%;
   min-height: 250px;
   flex-direction: column;
   gap: 10px;
   padding: 16px 18px 14px;
-  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  border: 1px solid rgba(0, 247, 255, 0.28);
   background-color: var(--bg);
   background-image:
-    radial-gradient(ellipse 80% 55% at 15% 0%, rgba(99, 102, 241, 0.14), transparent 70%),
-    radial-gradient(ellipse 70% 55% at 88% 100%, rgba(236, 72, 153, 0.12), transparent 70%);
+    radial-gradient(ellipse 80% 55% at 15% 0%, rgba(0, 247, 255, 0.12), transparent 70%),
+    radial-gradient(ellipse 70% 55% at 88% 100%, rgba(99, 102, 241, 0.14), transparent 70%);
+  box-shadow:
+    0 0 34px rgba(0, 247, 255, 0.24),
+    0 18px 42px -10px rgba(15, 23, 42, 0.36);
+  transform: scale(0.78) translateY(8px);
+  transform-origin: center center;
+  transition:
+    transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 320ms ease;
+  overflow: hidden;
+}
+
+.quick-stage.active .quick-card {
+  transform: scale(1) translateY(0);
+}
+
+.quick-stage.closing .quick-card {
+  transform: scale(0.8) translateY(6px);
+  transition: transform 200ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* 16099 动态流光渐变发光外框 */
+.quick-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  padding: 2px;
+  background: linear-gradient(45deg, #00f7ff, #0077ff, #6366f1, #ec4899, #00f7ff);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 3;
+  animation: techBorderHue 4s linear infinite;
+}
+
+@keyframes techBorderHue {
+  0% {
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    filter: hue-rotate(360deg);
+  }
+}
+
+/* 16099 扫描线与中心科技光晕层 */
+.quick-scanlines {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 247, 255, 0.015) 0%,
+    rgba(0, 247, 255, 0.055) 50%,
+    rgba(0, 247, 255, 0.015) 100%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.quick-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 40%, rgba(0, 247, 255, 0.1) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.quick-head,
+textarea,
+.img-preview,
+.actions {
+  position: relative;
+  z-index: 1;
 }
 
 .quick-aurora-bar {
@@ -227,6 +328,42 @@ textarea::placeholder {
   border: 1px solid var(--accent-line);
   border-radius: 12px;
   background: var(--accent-soft);
+  animation: appleQuickPreviewIn 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    opacity 160ms cubic-bezier(0.4, 0, 1, 1),
+    transform 160ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+.img-preview.is-leaving {
+  opacity: 0;
+  transform: translateY(5px) scale(0.97);
+  pointer-events: none;
+}
+
+@keyframes appleQuickPreviewIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes appleSpotlightEnter {
+  0% {
+    opacity: 0;
+    transform: scale(0.968) translateY(7px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.quick-card.is-entering {
+  animation: appleSpotlightEnter 250ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .img-preview img {
@@ -336,7 +473,8 @@ textarea::placeholder {
 
 .btn.primary:hover:not(:disabled) {
   background: var(--accent-grad-hover);
-  transform: translateY(-1px);
+  transform: scale(1.05);
+  box-shadow: 0 0 22px rgba(0, 247, 255, 0.55), 0 6px 16px -3px var(--accent-glow);
 }
 
 .btn:disabled {

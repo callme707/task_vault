@@ -25,16 +25,17 @@
       {
         "label": "quick",
         "title": "快速记录",
-        "width": 620,
-        "height": 300,
+        "width": 664,
+        "height": 344,
         "visible": false,
         "center": true,
         "decorations": false,
+        "transparent": true,
+        "shadow": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "resizable": false,
         "focus": false,
-        "backgroundColor": "#f6f8fd",
         "url": "quick.html"
       }
     ],

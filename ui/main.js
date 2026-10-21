@@ -28,8 +28,15 @@ const state = {
   busy: new Set(),
   refreshPromise: null,
   detailRenderToken: 0,
+  lastInspectorId: null,
   modalId: null,
   modalLastFocus: null,
+  animateInboxList: true,
+  animateTaskList: true,
+  knownInboxIds: new Set(),
+  knownTaskIds: new Set(),
+  lastInboxItemsSig: "",
+  lastTaskRenderSig: "",
 };
 
 const statusText = {
@@ -145,7 +152,36 @@ function initTheme() {
 }
 
 let toastTimer = null;
+let toastHideTimer = null;
+let inspectorCloseTimer = null;
+const modalCloseTimers = new Map();
 let currentSettings = null;
+
+function replayAnimation(el, className) {
+  if (!el) return;
+  el.classList.remove(className);
+  void el.offsetWidth;
+  el.classList.add(className);
+  el.addEventListener("animationend", () => {
+    el.classList.remove(className);
+  }, { once: true });
+}
+
+function setTextWithPop(id, nextText) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const prev = el.textContent;
+  el.textContent = nextText;
+  if (prev !== "" && prev !== nextText) {
+    replayAnimation(el, "value-pop");
+  }
+}
+
+function animateCardAction(card, action, durationMs = 175) {
+  if (!card) return Promise.resolve();
+  card.classList.add(`card-acting-${action}`);
+  return new Promise((resolve) => setTimeout(resolve, durationMs));
+}
 
 /* ===== 时间：UTC 存储，显示统一走 Intl 的本地时区 ===== */
 function asDate(value) {
@@ -217,11 +253,21 @@ function errorText(error) {
 function showToast(message, kind = "success") {
   const el = document.getElementById("toast");
   if (!el) return;
+  clearTimeout(toastTimer);
+  clearTimeout(toastHideTimer);
   el.textContent = message;
   el.classList.toggle("error", kind === "error");
-  el.classList.remove("hidden");
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add("hidden"), kind === "error" ? 4200 : 2500);
+  el.classList.remove("hidden", "toast-leaving");
+  void el.offsetWidth;
+  el.classList.add("toast-visible");
+  toastTimer = setTimeout(() => {
+    el.classList.remove("toast-visible");
+    el.classList.add("toast-leaving");
+    toastHideTimer = setTimeout(() => {
+      el.classList.add("hidden");
+      el.classList.remove("toast-leaving");
+    }, 190);
+  }, kind === "error" ? 4200 : 2500);
 }
 
 function showError(message) {
@@ -344,13 +390,10 @@ function updateWorkspacePulse() {
   const totalTasks = activeCount + doneCount;
   const rate = totalTasks > 0 ? `完成 ${Math.round((doneCount / totalTasks) * 100)}%` : "就绪";
 
-  const elUnpromoted = document.getElementById("pulse-unpromoted");
-  const elActive = document.getElementById("pulse-active");
-  const elDone = document.getElementById("pulse-done");
+  setTextWithPop("pulse-unpromoted", String(unpromotedCount));
+  setTextWithPop("pulse-active", String(activeCount));
+  setTextWithPop("pulse-done", String(doneCount));
   const elRate = document.getElementById("pulse-rate");
-  if (elUnpromoted) elUnpromoted.textContent = String(unpromotedCount);
-  if (elActive) elActive.textContent = String(activeCount);
-  if (elDone) elDone.textContent = String(doneCount);
   if (elRate) elRate.textContent = rate;
 }
 
@@ -365,33 +408,46 @@ function updateTaskMetrics() {
   const totalAll = activeTasks.length + totalDone;
   const rateText = totalAll > 0 ? `整体达成率 ${Math.round((totalDone / totalAll) * 100)}%` : "含已归档完成项";
 
-  const mActive = document.getElementById("metric-active");
-  const mUrgent = document.getElementById("metric-urgent");
-  const mOverdue = document.getElementById("metric-overdue");
-  const mDone = document.getElementById("metric-done");
+  setTextWithPop("metric-active", String(activeTasks.length));
+  setTextWithPop("metric-urgent", String(urgentCount));
+  setTextWithPop("metric-overdue", String(overdueCount));
+  setTextWithPop("metric-done", String(totalDone));
   const mRate = document.getElementById("metric-rate");
-  if (mActive) mActive.textContent = String(activeTasks.length);
-  if (mUrgent) mUrgent.textContent = String(urgentCount);
-  if (mOverdue) mOverdue.textContent = String(overdueCount);
-  if (mDone) mDone.textContent = String(totalDone);
   if (mRate) mRate.textContent = rateText;
 }
 
 /* ===== 导航与列表 ===== */
 function switchView(view) {
   if (!viewCopy[view]) return;
+  const prevView = state.view;
   state.view = view;
   document.querySelectorAll(".nav-item[data-view]").forEach((button) => {
     const active = button.dataset.view === view;
     button.classList.toggle("active", active);
     button.setAttribute("aria-current", active ? "page" : "false");
   });
-  document.getElementById("view-inbox")?.classList.toggle("hidden", view !== "inbox");
-  document.getElementById("view-tasks")?.classList.toggle("hidden", view !== "tasks");
+  const inboxView = document.getElementById("view-inbox");
+  const tasksView = document.getElementById("view-tasks");
+  inboxView?.classList.toggle("hidden", view !== "inbox");
+  tasksView?.classList.toggle("hidden", view !== "tasks");
   document.getElementById("btn-process-pending")?.classList.toggle("hidden", view !== "inbox");
   document.getElementById("page-kicker").textContent = viewCopy[view].kicker;
   document.getElementById("page-title").textContent = viewCopy[view].title;
   document.getElementById("page-subtitle").textContent = viewCopy[view].subtitle;
+
+  const targetView = view === "inbox" ? inboxView : tasksView;
+  replayAnimation(targetView, "view-entering");
+  replayAnimation(document.querySelector(".topbar-titles"), "title-switching");
+
+  if (prevView !== view) {
+    if (view === "inbox") {
+      state.animateInboxList = true;
+      renderInbox();
+    } else if (view === "tasks") {
+      state.animateTaskList = true;
+      renderTasks();
+    }
+  }
 }
 
 function inboxMatchesFilter(item) {
@@ -418,13 +474,33 @@ function renderInbox() {
   updateWorkspacePulse();
   if (!list) return;
   if (!shown.length) {
+    state.lastInboxItemsSig = "empty";
+    state.animateInboxList = false;
     list.innerHTML = state.inbox.length
       ? '<div class="empty">当前筛选条件下没有记录<br /><strong>可切换上方筛选胶囊查看全部记录</strong></div>'
       : '<div class="empty">还没有临时记录<br /><strong>按 Ctrl + Alt + Q 快速记录文字或粘贴截图</strong></div>';
     return;
   }
 
-  list.innerHTML = shown.map((item) => {
+  const itemsSig = shown.map((item) => {
+    const { promoted, total } = promotionCounts(item);
+    return `${item.id}:${item.ai_status}:${promoted}/${total}:${item.raw_text || ""}:${item.image_path ? 1 : 0}`;
+  }).join("|");
+
+  // If only selection changed (or 4s background poll had no inbox changes),
+  // update `.active` in-place so the card's spring CSS transition plays smoothly without DOM recreation.
+  if (!state.animateInboxList && itemsSig === state.lastInboxItemsSig && list.querySelectorAll(".inbox-row").length === shown.length) {
+    list.querySelectorAll(".inbox-row").forEach((row) => {
+      row.classList.toggle("active", Number(row.dataset.id) === state.selectedId);
+    });
+    return;
+  }
+
+  const shouldCascade = state.animateInboxList;
+  state.animateInboxList = false;
+  state.lastInboxItemsSig = itemsSig;
+
+  list.innerHTML = shown.map((item, idx) => {
     const { promoted, total } = promotionCounts(item);
     const promotion = promoted
       ? `<span class="badge promoted">${promoted}/${total} 已转正</span>`
@@ -433,8 +509,9 @@ function renderInbox() {
     const title = item.raw_text || (item.image_path ? "图片附件记录" : "无文字内容");
     const active = item.id === state.selectedId;
     const statusCls = item.ai_status || "pending";
+    const enterCls = (shouldCascade || !state.knownInboxIds.has(item.id)) ? "card-enter" : "";
     return `
-      <article class="inbox-row st-${esc(statusCls)} ${active ? "active" : ""}" data-id="${item.id}" tabindex="0" role="button" aria-label="打开记录：${esc(title)}">
+      <article class="inbox-row st-${esc(statusCls)} ${active ? "active" : ""} ${enterCls}" style="--i:${Math.min(idx, 12)}" data-id="${item.id}" tabindex="0" role="button" aria-label="打开记录：${esc(title)}">
         <div class="inbox-row-main">
           <div class="inbox-row-kicker"><span class="source-pill">${esc(sourceText(item.source))}</span><time datetime="${esc(item.created_at)}">${esc(formatDateTime(item.created_at))}</time></div>
           <div class="inbox-row-title">${imageMark}${esc(title)}</div>
@@ -443,7 +520,12 @@ function renderInbox() {
       </article>`;
   }).join("");
 
+  state.knownInboxIds = new Set(state.inbox.map((item) => item.id));
+
   list.querySelectorAll(".inbox-row").forEach((row) => {
+    if (row.classList.contains("card-enter")) {
+      row.addEventListener("animationend", () => row.classList.remove("card-enter"), { once: true });
+    }
     const select = () => selectInbox(Number(row.dataset.id));
     row.addEventListener("click", select);
     row.addEventListener("keydown", (event) => {
@@ -516,6 +598,8 @@ function renderTasks() {
   if (taskCount) taskCount.textContent = `${shown.length} 项任务`;
   if (!list) return;
   if (!shown.length) {
+    state.lastTaskRenderSig = `empty:${state.taskView}:${query}:${state.taskQuickFilter}`;
+    state.animateTaskList = false;
     const hasFilter = Boolean(query) || state.taskQuickFilter !== "all";
     const empty = state.taskView === "archived"
       ? "暂无已归档任务"
@@ -526,11 +610,25 @@ function renderTasks() {
     return;
   }
 
+  const tasksSig = `${state.taskView}:${query}:${state.taskQuickFilter}:` + shown.map((task) => {
+    const subtasks = safeArray(task.subtasks);
+    const doneCount = subtasks.filter((s) => s.is_done).length;
+    return `${task.id}:${task.title}:${task.status}:${task.priority}:${task.due_at || ""}:${task.progress || 0}:${doneCount}/${subtasks.length}:${isOverdue(task) ? 1 : 0}`;
+  }).join("|");
+
+  if (!state.animateTaskList && tasksSig === state.lastTaskRenderSig && list.querySelectorAll(".task").length === shown.length) {
+    return;
+  }
+
+  const shouldCascade = state.animateTaskList;
+  state.animateTaskList = false;
+  state.lastTaskRenderSig = tasksSig;
+
   const priorityOptions = (current) => ["P0", "P1", "P2", "P3"]
     .map((priority) => `<option value="${priority}" ${priority === current ? "selected" : ""}>${priority}</option>`)
     .join("");
 
-  list.innerHTML = shown.map((task) => {
+  list.innerHTML = shown.map((task, idx) => {
     const overdue = isOverdue(task);
     const subtasks = safeArray(task.subtasks);
     const doneCount = subtasks.filter((subtask) => subtask.is_done).length;
@@ -542,8 +640,9 @@ function renderTasks() {
     const progress = Number(task.progress) > 0 ? `<div class="progress" aria-label="进度 ${Math.min(Number(task.progress), 100)}%"><div class="progress-bar" style="width:${Math.min(Math.max(Number(task.progress) || 0, 0), 100)}%"></div></div>` : "";
     const restoreLabel = task.status === "done" ? "恢复到已完成" : "恢复到进行中";
     const prioClass = `prio-${esc(task.priority || "P2")}`;
+    const enterCls = (shouldCascade || !state.knownTaskIds.has(task.id)) ? "card-enter" : "";
     return `
-      <article class="task task-row task-row-${esc(taskViewFor(task))} ${prioClass} ${overdue ? "task-overdue" : ""}" data-id="${task.id}" tabindex="0" role="button" aria-label="编辑任务：${esc(task.title)}">
+      <article class="task task-row task-row-${esc(taskViewFor(task))} ${prioClass} ${overdue ? "task-overdue" : ""} ${enterCls}" style="--i:${Math.min(idx, 12)}" data-id="${task.id}" tabindex="0" role="button" aria-label="编辑任务：${esc(task.title)}">
         <div class="task-main">
           <div class="task-head"><div class="title">${esc(task.title)}</div><span class="badge st-${esc(task.status)}">${esc(taskStatusText[task.status] || task.status)}</span></div>
           ${description}
@@ -565,7 +664,13 @@ function renderTasks() {
       </article>`;
   }).join("");
 
+  const allLoadedTasks = taskViews.flatMap((v) => state.taskBuckets[v] || []);
+  state.knownTaskIds = new Set((allLoadedTasks.length ? allLoadedTasks : state.tasks).map((t) => t.id));
+
   list.querySelectorAll(".task").forEach((card) => {
+    if (card.classList.contains("card-enter")) {
+      card.addEventListener("animationend", () => card.classList.remove("card-enter"), { once: true });
+    }
     const open = () => openTaskModal(Number(card.dataset.id));
     card.addEventListener("click", (event) => {
       if (event.target.closest("button, select, input, label")) return;
@@ -601,12 +706,17 @@ function renderTasks() {
         event.stopPropagation();
         const task = state.tasks.find((item) => item.id === Number(button.dataset.id));
         if (!task) return;
+        const card = button.closest(".task");
         await runBusy(`status:${task.id}`, async () => {
           try {
-            await invoke("update_task", { task: taskAfterAction(task, action) });
+            await Promise.all([
+              invoke("update_task", { task: taskAfterAction(task, action) }),
+              animateCardAction(card, action, action === "start" ? 140 : 185),
+            ]);
             showToast(`任务已${taskStatusText[status] || status}`);
             await refreshAll();
           } catch (error) {
+            card?.classList.remove(`card-acting-${action}`);
             showError(`状态更新失败：${errorText(error)}`);
           }
         });
@@ -617,12 +727,17 @@ function renderTasks() {
   list.querySelectorAll("[data-action=\"archive\"]").forEach((button) => {
     button.addEventListener("click", async (event) => {
       event.stopPropagation();
+      const card = button.closest(".task");
       await runBusy(`archive:${button.dataset.id}`, async () => {
         try {
-          await invoke("archive_task", { id: Number(button.dataset.id) });
+          await Promise.all([
+            invoke("archive_task", { id: Number(button.dataset.id) }),
+            animateCardAction(card, "archive", 185),
+          ]);
           showToast("任务已归档");
           await refreshAll();
         } catch (error) {
+          card?.classList.remove("card-acting-archive");
           showError(`归档失败：${errorText(error)}`);
         }
       });
@@ -632,13 +747,18 @@ function renderTasks() {
   list.querySelectorAll("[data-action=\"unarchive\"]").forEach((button) => {
     button.addEventListener("click", async (event) => {
       event.stopPropagation();
+      const card = button.closest(".task");
       await runBusy(`archive:${button.dataset.id}`, async () => {
         try {
           const task = state.tasks.find((item) => item.id === Number(button.dataset.id));
-          await invoke("unarchive_task", { id: Number(button.dataset.id) });
+          await Promise.all([
+            invoke("unarchive_task", { id: Number(button.dataset.id) }),
+            animateCardAction(card, "unarchive", 185),
+          ]);
           showToast(task?.status === "done" ? "任务已恢复到已完成" : "任务已恢复到进行中");
           await refreshAll();
         } catch (error) {
+          card?.classList.remove("card-acting-unarchive");
           showError(`恢复任务失败：${errorText(error)}`);
         }
       });
@@ -649,12 +769,17 @@ function renderTasks() {
     button.addEventListener("click", async (event) => {
       event.stopPropagation();
       if (!window.confirm("确定删除该任务？删除后不会出现在任何列表中。")) return;
+      const card = button.closest(".task");
       await runBusy(`delete-task:${button.dataset.id}`, async () => {
         try {
-          await invoke("delete_task", { id: Number(button.dataset.id) });
+          await Promise.all([
+            invoke("delete_task", { id: Number(button.dataset.id) }),
+            animateCardAction(card, "delete", 185),
+          ]);
           showToast("任务已删除");
           await refreshAll();
         } catch (error) {
+          card?.classList.remove("card-acting-delete");
           showError(`删除任务失败：${errorText(error)}`);
         }
       });
@@ -664,6 +789,7 @@ function renderTasks() {
 
 function setTaskView(view) {
   if (!taskViews.includes(view)) return;
+  if (state.taskView !== view) state.animateTaskList = true;
   state.taskView = view;
   state.tasks = state.taskBuckets[view] || [];
   renderTasks();
@@ -814,19 +940,21 @@ function renderAiSummary(item, ai, items) {
 
   const activeAi = items[state.selectedItemIndex] || ai;
   if (chipsBox && activeAi) {
-    const chips = [];
-    if (activeAi.kind) chips.push(`<span class="ai-chip">类型 <strong>${esc(kindText[activeAi.kind] || activeAi.kind)}</strong></span>`);
-    if (activeAi.priority) chips.push(`<span class="ai-chip">优先级 <strong>${esc(activeAi.priority)}</strong></span>`);
+    const rawChips = [];
+    if (activeAi.kind) rawChips.push({ cls: "", html: `类型 <strong>${esc(kindText[activeAi.kind] || activeAi.kind)}</strong>` });
+    if (activeAi.priority) rawChips.push({ cls: "", html: `优先级 <strong>${esc(activeAi.priority)}</strong>` });
     if (typeof activeAi.confidence === "number" && activeAi.confidence > 0) {
-      chips.push(`<span class="ai-chip">置信度 <strong>${Math.round(activeAi.confidence * 100)}%</strong></span>`);
+      rawChips.push({ cls: "", html: `置信度 <strong>${Math.round(activeAi.confidence * 100)}%</strong>` });
     }
-    if (activeAi.deadline) chips.push(`<span class="ai-chip">截止 <strong>${esc(formatDateTime(activeAi.deadline))}</strong></span>`);
-    if (activeAi.estimate_minutes) chips.push(`<span class="ai-chip">预估 <strong>${esc(activeAi.estimate_minutes)}m</strong></span>`);
+    if (activeAi.deadline) rawChips.push({ cls: "", html: `截止 <strong>${esc(formatDateTime(activeAi.deadline))}</strong>` });
+    if (activeAi.estimate_minutes) rawChips.push({ cls: "", html: `预估 <strong>${esc(activeAi.estimate_minutes)}m</strong>` });
     if (safeArray(activeAi.missing_info).length) {
-      chips.push(`<span class="ai-chip warn">待补充：${esc(activeAi.missing_info.join("、"))}</span>`);
+      rawChips.push({ cls: "warn", html: `待补充：${esc(activeAi.missing_info.join("、"))}` });
     }
-    if (chips.length) {
-      chipsBox.innerHTML = chips.join("");
+    if (rawChips.length) {
+      chipsBox.innerHTML = rawChips
+        .map((c, idx) => `<span class="ai-chip ${c.cls}" style="--chip-i:${idx}">${c.html}</span>`)
+        .join("");
       chipsBox.classList.remove("hidden");
     }
   }
@@ -852,11 +980,27 @@ async function renderDetail(id) {
   const item = state.inbox.find((entry) => entry.id === id);
   if (!item) return;
   const token = ++state.detailRenderToken;
+  if (inspectorCloseTimer) {
+    clearTimeout(inspectorCloseTimer);
+    inspectorCloseTimer = null;
+  }
   const panel = document.getElementById("detail-panel");
+  const emptyEl = document.getElementById("detail-empty");
+  const contentEl = document.getElementById("detail-content");
   panel.classList.remove("hidden");
   panel.setAttribute("aria-hidden", "false");
-  document.getElementById("detail-empty").classList.add("hidden");
-  document.getElementById("detail-content").classList.remove("hidden");
+  emptyEl.classList.add("hidden");
+  emptyEl.classList.remove("empty-entering");
+  contentEl.classList.remove("hidden", "is-closing");
+
+  if (state.lastInspectorId !== id) {
+    state.lastInspectorId = id;
+    replayAnimation(contentEl, "inspector-entering");
+  } else {
+    replayAnimation(contentEl.querySelector(".ai-card"), "item-switching");
+    replayAnimation(contentEl.querySelector(".draft-card"), "item-switching");
+  }
+
   document.getElementById("detail-source").textContent = `${sourceText(item.source)} · ${formatDateTime(item.created_at)}${item.image_path ? " · 图片附件" : ""}`;
   const status = document.getElementById("ai-status");
   status.textContent = statusText[item.ai_status] || item.ai_status || "未知状态";
@@ -868,14 +1012,19 @@ async function renderDetail(id) {
   const image = document.getElementById("detail-img");
   if (item.image_path) {
     imageBlock.classList.remove("hidden");
+    image.classList.remove("is-loaded");
+    image.onload = () => image.classList.add("is-loaded");
     image.alt = "记录附件";
     try {
       image.src = await invoke("read_inbox_image", { id: item.id });
+      if (image.complete && image.naturalWidth > 0) image.classList.add("is-loaded");
     } catch {
       if (token === state.detailRenderToken) imageBlock.classList.add("hidden");
     }
   } else {
     imageBlock.classList.add("hidden");
+    image.classList.remove("is-loaded");
+    image.onload = null;
     image.src = "";
   }
   if (token !== state.detailRenderToken || state.selectedId !== id) return;
@@ -897,6 +1046,8 @@ async function renderDetail(id) {
     selector.onchange = () => {
       saveCurrentInboxDraft();
       state.selectedItemIndex = Number(selector.value);
+      replayAnimation(contentEl.querySelector(".ai-card"), "item-switching");
+      replayAnimation(contentEl.querySelector(".draft-card"), "item-switching");
       renderAiSummary(item, ai, items);
       fillDraftFromItem(items[state.selectedItemIndex], item, state.selectedItemIndex);
       updatePromotionUi(item, state.selectedItemIndex);
@@ -926,13 +1077,35 @@ function selectInbox(id) {
 function closeInspector() {
   saveCurrentInboxDraft();
   state.selectedId = null;
+  state.lastInspectorId = null;
   state.selectedItemIndex = 0;
   state.detailRenderToken += 1;
   const panel = document.getElementById("detail-panel");
+  const emptyEl = document.getElementById("detail-empty");
+  const contentEl = document.getElementById("detail-content");
   panel.setAttribute("aria-hidden", "true");
-  document.getElementById("detail-empty").classList.remove("hidden");
-  document.getElementById("detail-content").classList.add("hidden");
   renderInbox();
+
+  if (inspectorCloseTimer) {
+    clearTimeout(inspectorCloseTimer);
+    inspectorCloseTimer = null;
+  }
+
+  if (contentEl && !contentEl.classList.contains("hidden")) {
+    contentEl.classList.remove("inspector-entering");
+    contentEl.classList.add("is-closing");
+    inspectorCloseTimer = setTimeout(() => {
+      inspectorCloseTimer = null;
+      if (state.selectedId !== null) return;
+      contentEl.classList.add("hidden");
+      contentEl.classList.remove("is-closing");
+      emptyEl.classList.remove("hidden");
+      replayAnimation(emptyEl, "empty-entering");
+    }, 180);
+  } else {
+    contentEl?.classList.add("hidden");
+    emptyEl?.classList.remove("hidden");
+  }
 }
 
 async function promoteSelected() {
@@ -993,27 +1166,43 @@ function getEditingTask() {
 function openModal(id, preferredFocusId) {
   const modal = document.getElementById(id);
   if (!modal) return;
+  if (modalCloseTimers.has(id)) {
+    clearTimeout(modalCloseTimers.get(id));
+    modalCloseTimers.delete(id);
+  }
   state.modalId = id;
   state.modalLastFocus = document.activeElement;
-  modal.classList.remove("hidden");
+  modal.classList.remove("hidden", "is-closing");
   modal.setAttribute("aria-hidden", "false");
+  void modal.offsetWidth;
+  modal.classList.add("is-open");
   setTimeout(() => {
     const target = preferredFocusId ? document.getElementById(preferredFocusId) : modal.querySelector("input, select, textarea, button");
     target?.focus();
-  }, 0);
+  }, 40);
 }
 
 function closeModal(id = state.modalId) {
   const modal = document.getElementById(id);
   if (!modal) return;
-  modal.classList.add("hidden");
   modal.setAttribute("aria-hidden", "true");
+  modal.classList.remove("is-open");
+  modal.classList.add("is-closing");
   if (state.modalId === id) {
     state.modalId = null;
     const target = state.modalLastFocus;
     state.modalLastFocus = null;
     if (target && typeof target.focus === "function") target.focus();
   }
+  if (modalCloseTimers.has(id)) {
+    clearTimeout(modalCloseTimers.get(id));
+  }
+  const timer = setTimeout(() => {
+    modalCloseTimers.delete(id);
+    modal.classList.add("hidden");
+    modal.classList.remove("is-closing");
+  }, 200);
+  modalCloseTimers.set(id, timer);
 }
 
 function setTaskModalMode(mode) {
@@ -1081,8 +1270,8 @@ function renderEditSubtasks() {
     box.innerHTML = '<div class="subtask-empty">暂无子任务</div>';
     return;
   }
-  box.innerHTML = subtasks.map((subtask) => `
-    <div class="subtask ${subtask.is_done ? "is-done" : ""}" data-id="${subtask.id}">
+  box.innerHTML = subtasks.map((subtask, idx) => `
+    <div class="subtask ${subtask.is_done ? "is-done" : ""}" style="--sub-i:${Math.min(idx, 10)}" data-id="${subtask.id}">
       <label class="subtask-check"><input type="checkbox" ${subtask.is_done ? "checked" : ""} /><span class="subtask-text">${esc(subtask.text)}</span></label>
       <button class="btn small danger-ghost subtask-del" type="button" data-id="${subtask.id}">删除</button>
     </div>`).join("");
@@ -1104,11 +1293,17 @@ function renderEditSubtasks() {
   box.querySelectorAll(".subtask-del").forEach((button) => {
     button.addEventListener("click", async () => {
       const subtaskId = Number(button.dataset.id);
+      const row = button.closest(".subtask");
       await runBusy(`subtask-delete:${subtaskId}`, async () => {
         try {
-          await invoke("delete_subtask", { id: subtaskId });
+          row?.classList.add("is-removing");
+          await Promise.all([
+            invoke("delete_subtask", { id: subtaskId }),
+            new Promise((resolve) => setTimeout(resolve, 160)),
+          ]);
           await refreshAll();
         } catch (error) {
+          row?.classList.remove("is-removing");
           showError(`删除子任务失败：${errorText(error)}`);
         }
       });
@@ -1395,7 +1590,9 @@ async function init() {
   });
   document.querySelectorAll("[data-inbox-filter]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.inboxFilter = button.dataset.inboxFilter || "all";
+      const nextFilter = button.dataset.inboxFilter || "all";
+      if (state.inboxFilter !== nextFilter) state.animateInboxList = true;
+      state.inboxFilter = nextFilter;
       document.querySelectorAll("[data-inbox-filter]").forEach((el) => {
         el.classList.toggle("active", el === button);
       });
@@ -1404,7 +1601,9 @@ async function init() {
   });
   document.querySelectorAll("[data-task-quick]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.taskQuickFilter = button.dataset.taskQuick || "all";
+      const nextQuick = button.dataset.taskQuick || "all";
+      if (state.taskQuickFilter !== nextQuick) state.animateTaskList = true;
+      state.taskQuickFilter = nextQuick;
       document.querySelectorAll("[data-task-quick]").forEach((el) => {
         el.classList.toggle("active", el === button);
       });
@@ -1437,14 +1636,19 @@ async function init() {
   document.getElementById("btn-delete-inbox").addEventListener("click", async () => {
     const item = selectedInboxItem();
     if (!item || !window.confirm("只会在记录区中忽略这条记录，不会删除正式任务中的关联记录。继续？")) return;
+    const activeRow = document.querySelector(`.inbox-row[data-id="${item.id}"]`);
     await runBusy(`delete-inbox:${item.id}`, async () => {
       try {
-        await invoke("delete_inbox", { id: item.id });
+        await Promise.all([
+          invoke("delete_inbox", { id: item.id }),
+          animateCardAction(activeRow, "delete", 180),
+        ]);
         state.inboxDrafts.delete(draftKeyFor(item));
         closeInspector();
         showToast("记录已忽略");
         await refreshAll();
       } catch (error) {
+        activeRow?.classList.remove("card-acting-delete");
         showError(`忽略记录失败：${errorText(error)}`);
       }
     }, "btn-delete-inbox", "处理中…");

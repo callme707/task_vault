@@ -30,19 +30,23 @@ pub struct AppState {
 fn toggle_window(app: &AppHandle, label: &str) {
     if let Some(win) = app.get_webview_window(label) {
         if win.is_visible().unwrap_or(false) {
-            let _ = win.hide();
+            if label == "quick" {
+                let _ = win.eval("if (typeof window.__onQuickClose === 'function') window.__onQuickClose(); else window.__TAURI__?.core?.invoke('hide_window', { label: 'quick' });");
+            } else {
+                let _ = win.hide();
+            }
         } else {
             if label == "quick" {
                 if let Ok(cursor) = win.cursor_position() {
-                    let x = (cursor.x as i32 - 300).max(0);
-                    let y = (cursor.y as i32 - 40).max(0);
+                    let x = (cursor.x as i32 - 332).max(0);
+                    let y = (cursor.y as i32 - 52).max(0);
                     let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
                 }
             }
             let _ = win.show();
             let _ = win.set_focus();
             if label == "quick" {
-                let js = "setTimeout(() => { const el = document.getElementById('task-input'); if (el) { el.focus(); el.select(); } }, 30)";
+                let js = "if (typeof window.__onQuickOpen === 'function') window.__onQuickOpen(); setTimeout(() => { const el = document.getElementById('task-input'); if (el) { el.focus(); el.select(); } }, 30)";
                 let _ = win.eval(js);
             }
         }
