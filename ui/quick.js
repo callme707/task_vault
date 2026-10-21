@@ -99,6 +99,37 @@ function clearImage(immediate = false) {
   }, 180);
 }
 
+function setQuickPersona(value) {
+  const select = document.getElementById("quick-persona");
+  const label = document.getElementById("quick-persona-label");
+  const menu = document.getElementById("quick-persona-menu");
+  const wrap = document.getElementById("quick-persona-wrap");
+  const btn = document.getElementById("quick-persona-btn");
+  if (select) select.value = value;
+  if (menu) {
+    menu.querySelectorAll(".quick-persona-opt").forEach((opt) => {
+      const active = opt.dataset.value === value;
+      opt.classList.toggle("active", active);
+      opt.setAttribute("aria-selected", String(active));
+      if (active && label) label.textContent = opt.textContent;
+    });
+    menu.classList.add("hidden");
+  }
+  wrap?.classList.remove("is-open");
+  btn?.setAttribute("aria-expanded", "false");
+}
+
+function toggleQuickPersonaMenu(forceOpen) {
+  const menu = document.getElementById("quick-persona-menu");
+  const wrap = document.getElementById("quick-persona-wrap");
+  const btn = document.getElementById("quick-persona-btn");
+  if (!menu || !wrap || !btn) return;
+  const open = typeof forceOpen === "boolean" ? forceOpen : menu.classList.contains("hidden");
+  menu.classList.toggle("hidden", !open);
+  wrap.classList.toggle("is-open", open);
+  btn.setAttribute("aria-expanded", String(open));
+}
+
 async function save() {
   if (saving) return;
   const input = document.getElementById("task-input");
@@ -122,7 +153,7 @@ async function save() {
       await invoke("capture_inbox", { text, source: "hotkey", persona });
     }
     input.value = "";
-    if (personaSelect) personaSelect.value = "";
+    setQuickPersona("");
     clearImage(true);
     setStatus("已保存");
     await hideQuickWindow();
@@ -144,6 +175,7 @@ function readPasteAsDataUrl(file) {
 }
 
 async function hideQuickWindow() {
+  toggleQuickPersonaMenu(false);
   const stage = document.getElementById("quick-stage");
   if (stage && stage.classList.contains("active")) {
     stage.classList.remove("active");
@@ -173,6 +205,33 @@ if (typeof document !== "undefined") {
     document.getElementById("btn-save").addEventListener("click", save);
     document.getElementById("btn-cancel").addEventListener("click", hideQuickWindow);
     document.getElementById("btn-remove-img").addEventListener("click", () => clearImage(false));
+    document.getElementById("quick-persona-btn")?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleQuickPersonaMenu();
+    });
+    document.querySelectorAll(".quick-persona-opt").forEach((opt) => {
+      opt.addEventListener("click", (event) => {
+        event.stopPropagation();
+        setQuickPersona(opt.dataset.value || "");
+        input.focus();
+      });
+    });
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest("#quick-persona-wrap")) {
+        toggleQuickPersonaMenu(false);
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        const menu = document.getElementById("quick-persona-menu");
+        if (menu && !menu.classList.contains("hidden")) {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleQuickPersonaMenu(false);
+          input.focus();
+        }
+      }
+    }, true);
     input.addEventListener("input", () => {
       if (document.getElementById("status").textContent === "先输入内容或附加一张图片") setStatus("");
     });
