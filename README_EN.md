@@ -4,7 +4,7 @@
 
 **A Local-First, AI-Powered Desktop Inbox & Task Management Workbench for Windows**
 
-[![Version](https://img.shields.io/badge/version-v1.1.0-6366f1.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v1.2.0-6366f1.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20(x64)-0ea5e9.svg)](#getting-started)
 [![Backend](https://img.shields.io/badge/backend-Rust%20%2B%20Tauri%202-f97316.svg)](#architecture)
 [![Frontend](https://img.shields.io/badge/frontend-Vanilla%20JS%20(Zero--Build)-10b981.svg)](#architecture)
@@ -162,8 +162,8 @@ cargo tauri build --ci --bundles nsis,msi -- --offline --locked
 
 Build artifacts are generated at:
 - **Portable Release Binary**: `src-tauri/target/release/task-vault.exe`
-- **NSIS Installer**: `src-tauri/target/release/bundle/nsis/TaskVault_1.1.0_x64-setup.exe`
-- **MSI Installer**: `src-tauri/target/release/bundle/msi/TaskVault_1.1.0_x64_en-US.msi`
+- **NSIS Installer**: `src-tauri/target/release/bundle/nsis/TaskVault_1.2.0_x64-setup.exe`
+- **MSI Installer**: `src-tauri/target/release/bundle/msi/TaskVault_1.2.0_x64_en-US.msi`
 
 > [!NOTE]
 > Before overwriting a running Release binary, exit any active `TaskVault` instance from the system tray menu.

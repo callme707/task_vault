@@ -4,7 +4,7 @@
 
 **面向 Windows 桌面的本地优先、AI 驱动灵感收集与任务管理工作台**
 
-[![Version](https://img.shields.io/badge/version-v1.1.0-6366f1.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v1.2.0-6366f1.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20(x64)-0ea5e9.svg)](#快速开始)
 [![Backend](https://img.shields.io/badge/backend-Rust%20%2B%20Tauri%202-f97316.svg)](#系统架构)
 [![Frontend](https://img.shields.io/badge/frontend-Vanilla%20JS%20(Zero--Build)-10b981.svg)](#系统架构)
@@ -162,8 +162,8 @@ cargo tauri build --ci --bundles nsis,msi -- --offline --locked
 
 构建完成后，产物位于：
 - **独立可执行文件**：`src-tauri/target/release/task-vault.exe`
-- **NSIS 安装包**：`src-tauri/target/release/bundle/nsis/TaskVault_1.1.0_x64-setup.exe`
-- **MSI 安装包**：`src-tauri/target/release/bundle/msi/TaskVault_1.1.0_x64_en-US.msi`
+- **NSIS 安装包**：`src-tauri/target/release/bundle/nsis/TaskVault_1.2.0_x64-setup.exe`
+- **MSI 安装包**：`src-tauri/target/release/bundle/msi/TaskVault_1.2.0_x64_en-US.msi`
 
 > [!NOTE]
 > 重新覆盖构建 Release 产物前，请先从系统托盘菜单退出正在运行的 `TaskVault` 实例。
