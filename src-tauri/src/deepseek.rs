@@ -1,5 +1,7 @@
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine as _;
+use std::time::Duration;
+
 use chrono::Local;
 use serde_json::{json, Value};
 
@@ -22,7 +24,14 @@ pub enum AiError {
 
 impl AiError {
     pub fn retryable(&self) -> bool {
-        matches!(self, Self::Network(_) | Self::Http(408 | 429 | 500..=599))
+        match self {
+            // A client-side timeout usually means the provider was still
+            // generating (and billing) the response. Retrying would pay for
+            // the same slow request again, so only other network errors retry.
+            Self::Network(error) => !error.is_timeout(),
+            Self::Http(status) => matches!(status, 408 | 429 | 500..=599),
+            _ => false,
+        }
     }
 }
 
@@ -43,6 +52,19 @@ pub const MAX_IMAGE_BYTES: usize = 4 * 1024 * 1024;
 /// MiMo 官方文档明确：max_completion_tokens 限制的是“思考+正文”总量，建议给足。
 const TEXT_MAX_TOKENS: u32 = 2048;
 const IMAGE_MAX_TOKENS: u32 = 16384;
+
+/// 单次请求的总超时（含读取响应体）。图片请求输出预算大、常走推理型模型，
+/// 60 秒内往往生成不完，因此单独放宽；超时不会自动重试（见 `AiError::retryable`）。
+pub const TEXT_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+pub const IMAGE_REQUEST_TIMEOUT: Duration = Duration::from_secs(180);
+
+fn request_timeout(with_image: bool) -> Duration {
+    if with_image {
+        IMAGE_REQUEST_TIMEOUT
+    } else {
+        TEXT_REQUEST_TIMEOUT
+    }
+}
 
 /// 按文件头魔数识别常见图片格式
 pub fn sniff_image_mime(bytes: &[u8]) -> Option<&'static str> {
@@ -209,7 +231,10 @@ async fn parse_with_openai(
     }
 
     let url = format!("{}/chat/completions", settings.normalized_base_url());
-    let mut request = client.post(&url).json(&body);
+    let mut request = client
+        .post(&url)
+        .timeout(request_timeout(with_image))
+        .json(&body);
     if !api_key.is_empty() {
         request = request.bearer_auth(api_key);
     }
@@ -268,6 +293,7 @@ async fn parse_with_anthropic(
     let url = format!("{}/v1/messages", settings.normalized_base_url());
     let resp = client
         .post(&url)
+        .timeout(request_timeout(with_image))
         .header("x-api-key", api_key)
         .header("anthropic-version", "2023-06-01")
         .json(&body)
@@ -470,6 +496,36 @@ fn validate_parsed(parsed: AiParsed) -> Result<AiParsed, AiError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retry_policy_skips_permanent_errors() {
+        for status in [408, 429, 500, 502, 503, 504] {
+            assert!(AiError::Http(status).retryable(), "{status}");
+        }
+        for status in [400, 401, 403, 404, 422] {
+            assert!(!AiError::Http(status).retryable(), "{status}");
+        }
+        assert!(!AiError::NoApiKey.retryable());
+        assert!(!AiError::Api("bad".into()).retryable());
+        assert!(request_timeout(true) > request_timeout(false));
+    }
+
+    #[tokio::test]
+    async fn client_timeout_is_not_retried() {
+        // A loopback listener that accepts the connection but never answers.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let client = reqwest::Client::new();
+        let error = client
+            .get(format!("http://{address}/"))
+            .timeout(Duration::from_millis(200))
+            .send()
+            .await
+            .expect_err("silent server must time out");
+        assert!(error.is_timeout());
+        assert!(!AiError::Network(error).retryable());
+        drop(listener);
+    }
 
     #[test]
     fn parse_content_json_tolerates_wrappers() {

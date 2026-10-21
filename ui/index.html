@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,80 +7,149 @@
   <link rel="stylesheet" href="main.css" />
 </head>
 <body>
+  <div class="aurora-bg" aria-hidden="true">
+    <div class="aurora-blob blob-1"></div>
+    <div class="aurora-blob blob-2"></div>
+    <div class="aurora-blob blob-3"></div>
+  </div>
+
   <header id="titlebar" class="titlebar" aria-label="窗口栏">
     <div id="titlebar-drag" class="titlebar-drag">
-      <span class="icon icon-layers" aria-hidden="true"></span><span>TaskVault</span>
+      <span class="titlebar-badge">
+        <span class="titlebar-dot" aria-hidden="true"></span>
+        <span class="titlebar-name">TaskVault</span>
+      </span>
+      <span class="titlebar-pill">AI 灵感与任务空间</span>
     </div>
-    <div class="window-controls">
-      <button id="win-minimize" class="window-control" type="button" aria-label="最小化" title="最小化"><span class="icon icon-minus" aria-hidden="true"></span></button>
-      <button id="win-maximize" class="window-control" type="button" aria-label="最大化" title="最大化"><span class="icon icon-square" aria-hidden="true"></span></button>
-      <button id="win-close" class="window-control window-close" type="button" aria-label="关闭到托盘" title="关闭到托盘"><span class="icon icon-x" aria-hidden="true"></span></button>
+    <div class="titlebar-right">
+      <button id="btn-theme-toggle" class="theme-toggle" type="button" title="切换活力日光 / 极光暗夜主题" aria-label="切换主题">
+        <span id="theme-toggle-label">☀️ 活力日光</span>
+      </button>
+      <div class="window-controls">
+        <button id="win-minimize" class="window-control" type="button" aria-label="最小化" title="最小化"><span class="icon icon-minus" aria-hidden="true"></span></button>
+        <button id="win-maximize" class="window-control" type="button" aria-label="最大化" title="最大化"><span class="icon icon-square" aria-hidden="true"></span></button>
+        <button id="win-close" class="window-control window-close" type="button" aria-label="关闭到托盘" title="关闭到托盘"><span class="icon icon-x" aria-hidden="true"></span></button>
+      </div>
     </div>
   </header>
+
   <div class="app-shell">
     <aside class="sidebar" aria-label="主导航">
       <div class="sidebar-brand">
-        <div>
-          <div class="brand-name">个人工作区</div>
-          <div class="brand-caption">记录、整理与推进</div>
+        <div class="brand-monogram" aria-hidden="true">
+          <span>TV</span>
+        </div>
+        <div class="brand-text">
+          <div class="brand-name">TaskVault</div>
+          <div class="brand-caption">捕捉灵感 · 智能推进</div>
         </div>
       </div>
 
-      <div class="sidebar-section-label">工作空间</div>
-      <nav class="nav-list">
+      <div class="sidebar-section-label">WORKSPACE</div>
+      <nav class="nav-list" aria-label="视图切换">
         <button class="nav-item active" data-view="inbox" type="button">
-          <span class="icon icon-inbox" aria-hidden="true"></span>
-          <span class="nav-label">记录区</span>
+          <span class="nav-icon-wrap nav-icon-inbox"><span class="icon icon-inbox" aria-hidden="true"></span></span>
+          <span class="nav-label">灵感收集箱</span>
           <span id="nav-inbox-count" class="nav-count">0</span>
         </button>
         <button class="nav-item" data-view="tasks" type="button">
-          <span class="icon icon-list-todo" aria-hidden="true"></span>
-          <span class="nav-label">正式任务</span>
+          <span class="nav-icon-wrap nav-icon-tasks"><span class="icon icon-list-todo" aria-hidden="true"></span></span>
+          <span class="nav-label">正式任务看板</span>
           <span id="nav-task-count" class="nav-count">0</span>
         </button>
       </nav>
 
-      <div class="sidebar-spacer"></div>
-      <div class="sidebar-shortcuts"><span>快速记录</span><kbd>Ctrl Alt Q</kbd><span>打开工作区</span><kbd>Ctrl Alt W</kbd></div>
-      <div class="sidebar-footnote">
-        <span class="status-dot" aria-hidden="true"></span>
-        <span>本地工作区</span>
+      <div class="sidebar-pulse" aria-label="工作区概览">
+        <div class="pulse-header">
+          <span class="pulse-title">今日能量脉搏</span>
+          <span id="pulse-rate" class="pulse-rate">就绪</span>
+        </div>
+        <div class="pulse-grid">
+          <div class="pulse-stat stat-violet">
+            <span id="pulse-unpromoted" class="pulse-val">0</span>
+            <span class="pulse-lbl">待转正</span>
+          </div>
+          <div class="pulse-stat stat-sky">
+            <span id="pulse-active" class="pulse-val">0</span>
+            <span class="pulse-lbl">进行中</span>
+          </div>
+          <div class="pulse-stat stat-mint">
+            <span id="pulse-done" class="pulse-val">0</span>
+            <span class="pulse-lbl">已完成</span>
+          </div>
+        </div>
       </div>
-      <button id="btn-settings" class="nav-item nav-settings" type="button">
-        <span class="icon icon-settings-2" aria-hidden="true"></span>
-        <span class="nav-label">设置</span>
-      </button>
+
+      <div class="sidebar-spacer"></div>
+
+      <div class="sidebar-shortcuts" aria-label="全局快捷键">
+        <div class="shortcut-row">
+          <span>⚡ 闪念 / 截图</span>
+          <span class="kbd-group"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Q</kbd></span>
+        </div>
+        <div class="shortcut-row">
+          <span>🚀 呼出工作台</span>
+          <span class="kbd-group"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>W</kbd></span>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-footnote" title="数据库、图片附件与密钥均由当前 Windows 账户 DPAPI 加密保护">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span>DPAPI 本地加密守护中</span>
+        </div>
+        <button id="btn-settings" class="nav-item nav-settings" type="button">
+          <span class="nav-icon-wrap nav-icon-settings"><span class="icon icon-settings-2" aria-hidden="true"></span></span>
+          <span class="nav-label">AI 与偏好设置</span>
+        </button>
+      </div>
     </aside>
 
     <main class="app-main">
       <header class="topbar">
         <div class="page-heading">
-          <div class="eyebrow"><span id="page-kicker">RECORDS</span></div>
-          <h1 id="page-title">记录区</h1>
-          <p id="page-subtitle">先收集，再确认。AI 建议会保留在原始记录旁。</p>
+          <div class="heading-title-row">
+            <span class="eyebrow"><span id="page-kicker">INBOX STUDIO</span></span>
+            <h1 id="page-title">记录区</h1>
+          </div>
+          <p id="page-subtitle">随手收集一句话或截图，AI 自动提炼结构化草稿，由你确认入库。</p>
         </div>
         <div class="topbar-actions">
-          <button id="btn-process-pending" class="btn primary" type="button">整理待处理</button>
-          <button id="btn-refresh" class="btn ghost" type="button">刷新</button>
+          <button id="btn-process-pending" class="btn primary pill-btn" type="button">✨ 整理待处理</button>
+          <button id="btn-refresh" class="btn ghost pill-btn" type="button">刷新</button>
         </div>
       </header>
 
       <section id="view-inbox" class="view active" aria-labelledby="page-title">
         <div class="view-toolbar">
-          <div>
-            <p><span id="inbox-count">0 条记录</span><span class="toolbar-separator">·</span>原始内容会一直保留</p>
+          <div class="toolbar-left">
+            <p class="toolbar-summary">
+              <strong id="inbox-count">0 条记录</strong>
+              <span class="toolbar-separator">·</span>
+              <span>原始记录永久保留</span>
+            </p>
+            <div id="inbox-filter-group" class="filter-pills" role="group" aria-label="记录筛选">
+              <button class="filter-pill active" data-inbox-filter="all" type="button">全部</button>
+              <button class="filter-pill" data-inbox-filter="unpromoted" type="button">待转正</button>
+              <button class="filter-pill" data-inbox-filter="image" type="button">🖼️ 截图</button>
+              <button class="filter-pill" data-inbox-filter="attention" type="button">⚡ 待处理</button>
+            </div>
           </div>
-          <div class="toolbar-hint"><kbd>Ctrl</kbd><span>+</span><kbd>Alt</kbd><span>+</span><kbd>Q</kbd><span>快速记录</span></div>
+          <div class="toolbar-hint">
+            <span>快捷键</span>
+            <kbd>Ctrl</kbd><span>+</span><kbd>Alt</kbd><span>+</span><kbd>Q</kbd>
+            <span>极速录入</span>
+          </div>
         </div>
 
         <div class="inbox-workspace">
           <section class="surface inbox-list-pane" aria-label="记录区列表">
             <div class="surface-head compact-head">
               <div>
-                <div class="surface-title">全部记录</div>
-                <div class="surface-subtitle">按最近添加排序</div>
+                <div class="surface-title">灵感与收集流</div>
+                <div class="surface-subtitle">最新收集在最前 · 点击卡片展开 AI 草稿</div>
               </div>
-              <span class="icon icon-inbox" aria-hidden="true"></span>
+              <span class="pane-badge"><span class="icon icon-inbox" aria-hidden="true"></span></span>
             </div>
             <div id="inbox-list" class="list inbox-list"></div>
           </section>
@@ -88,78 +157,121 @@
           <section id="detail-panel" class="surface inspector-pane" aria-label="记录检查器">
             <div class="inspector-head">
               <div>
-                <div class="surface-title">记录详情</div>
-                <div class="surface-subtitle">核对建议，整理为正式任务</div>
+                <div class="surface-title">AI 审阅与转正工作台</div>
+                <div class="surface-subtitle">核对 AI 提炼建议，一键转化为正式任务</div>
               </div>
-              <button id="btn-close-inspector" class="icon-btn" type="button" aria-label="关闭记录检查器" title="关闭检查器">关闭</button>
+              <button id="btn-close-inspector" class="icon-btn" type="button" aria-label="关闭记录检查器" title="关闭检查器">收起</button>
             </div>
+
             <div id="detail-empty" class="inspector-empty">
-              <div class="empty-mark" aria-hidden="true"><span class="icon icon-inbox"></span></div>
-              <div class="surface-title">选择一条记录</div>
-              <p>打开原文，查看 AI 建议，再整理成正式任务。</p>
+              <div class="empty-halo">
+                <div class="empty-mark" aria-hidden="true"><span class="icon icon-inbox"></span></div>
+              </div>
+              <div class="empty-heading">点选左侧卡片，开启 AI 提炼预览</div>
+              <p>无论是会议群聊截图还是随手记下的灵感，AI 都会为你拆解出标题、优先级、截止时间与子任务清单。</p>
               <div class="empty-flow" aria-label="整理流程">
-                <span>收集</span><span class="flow-arrow" aria-hidden="true">→</span><span>检查</span><span class="flow-arrow" aria-hidden="true">→</span><span>转正</span>
+                <span class="flow-step"><em>1</em> 随手收集</span>
+                <span class="flow-arrow" aria-hidden="true">→</span>
+                <span class="flow-step"><em>2</em> AI 提炼</span>
+                <span class="flow-arrow" aria-hidden="true">→</span>
+                <span class="flow-step"><em>3</em> 确认推进</span>
               </div>
             </div>
+
             <div id="detail-content" class="detail hidden">
-              <div class="detail-topline">
-                <div id="detail-source" class="detail-source"></div>
-                <span id="ai-status" class="badge"></span>
-              </div>
+              <div class="inspector-card raw-card">
+                <div class="detail-topline">
+                  <div id="detail-source" class="detail-source"></div>
+                  <span id="ai-status" class="badge"></span>
+                </div>
 
-              <div id="detail-image" class="detail-image hidden">
-                <div class="block-title">附图</div>
-                <img id="detail-img" alt="记录附件" />
-              </div>
+                <div id="detail-image" class="detail-image hidden">
+                  <div class="block-title">原始截图附件</div>
+                  <div class="image-stage">
+                    <img id="detail-img" alt="记录附件" />
+                  </div>
+                </div>
 
-              <div class="raw-block">
-                <div class="block-title">原始记录</div>
-                <pre id="raw-text"></pre>
-                <div class="ai-line">
-                  <span id="ai-model"></span>
-                  <span class="detail-divider" aria-hidden="true"></span>
-                  <span class="immutable-note">原始内容不可修改</span>
-                  <button id="btn-reparse" class="btn small ghost" type="button">重新解析</button>
+                <div class="raw-block">
+                  <div class="block-title">原始存证内容</div>
+                  <pre id="raw-text"></pre>
+                  <div class="ai-line">
+                    <span id="ai-model" class="model-tag"></span>
+                    <span class="detail-divider" aria-hidden="true"></span>
+                    <span class="immutable-note">原始记录只读保护</span>
+                    <button id="btn-reparse" class="btn small ghost" type="button">↻ 重新解析</button>
+                  </div>
                 </div>
               </div>
 
-              <div class="block-title">AI 建议</div>
-              <div id="ai-summary" class="ai-summary"></div>
-
-              <div class="draft-heading">
-                <div>
-                  <div class="block-title">转正草稿</div>
-                  <div class="draft-help">点击“转为正式任务”后保存，原始记录始终保留。</div>
+              <div class="inspector-card ai-card">
+                <div class="card-section-head">
+                  <div class="block-title">✨ AI 智能提炼</div>
+                  <span class="ai-spark-tag">AI INSIGHT</span>
                 </div>
-                <span id="promotion-progress" class="progress-note"></span>
+                <div id="ai-chips" class="ai-chips hidden"></div>
+                <div id="ai-summary" class="ai-summary"></div>
               </div>
 
-              <label class="full hidden" id="f-item-wrap">待办选择
-                <select id="f-item"></select>
-                <span id="f-item-state" class="field-note"></span>
-              </label>
-              <div class="form-grid">
-                <label>标题 <input id="f-title" autocomplete="off" /></label>
-                <label>类型
-                  <select id="f-kind"><option value="task">任务</option><option value="requirement">需求</option><option value="idea">想法</option><option value="note">记录</option></select>
+              <div class="inspector-card draft-card">
+                <div class="draft-heading">
+                  <div>
+                    <div class="block-title">任务草稿编辑器</div>
+                    <div class="draft-help">可自由调整任意字段，点击下方按钮加入正式任务看板。</div>
+                  </div>
+                  <span id="promotion-progress" class="progress-note"></span>
+                </div>
+
+                <label class="full item-switcher hidden" id="f-item-wrap">
+                  <span class="switcher-label">🎯 图中识别出多项待办（可切换逐项转正）</span>
+                  <select id="f-item"></select>
+                  <span id="f-item-state" class="field-note"></span>
                 </label>
-                <label>优先级
-                  <select id="f-priority"><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
+
+                <label class="hero-title-field">
+                  <span class="field-caption">任务标题</span>
+                  <input id="f-title" class="hero-title-input" autocomplete="off" placeholder="输入清晰、有行动感的任务标题…" />
                 </label>
-                <label>状态
-                  <select id="f-status"><option value="todo">待办</option><option value="in_progress">进行中</option><option value="blocked">阻塞</option><option value="done">完成</option></select>
-                </label>
-                <label>截止时间 <input id="f-due" type="datetime-local" /></label>
-                <label>预估工时（分钟） <input id="f-estimate" type="number" min="0" /></label>
-                <label>计划开始 <input id="f-start" type="datetime-local" /></label>
-                <label>计划结束 <input id="f-end" type="datetime-local" /></label>
-              </div>
-              <label class="full">描述 <textarea id="f-description"></textarea></label>
-              <label class="full">标签 <input id="f-tags" placeholder="逗号分隔" /></label>
-              <label class="full">子任务 <textarea id="f-subtasks" rows="3" placeholder="每行一条"></textarea></label>
-              <div class="row-actions">
-                <button id="btn-promote" class="btn primary" type="button">转为正式任务</button>
-                <button id="btn-delete-inbox" class="btn danger-ghost" type="button">忽略记录</button>
+
+                <div class="form-grid">
+                  <label>类型
+                    <select id="f-kind">
+                      <option value="task">🎯 任务 (Task)</option>
+                      <option value="requirement">📦 需求 (Requirement)</option>
+                      <option value="idea">💡 想法 (Idea)</option>
+                      <option value="note">📝 记录 (Note)</option>
+                    </select>
+                  </label>
+                  <label>优先级
+                    <select id="f-priority">
+                      <option value="P0">🔥 P0 · 紧急关键</option>
+                      <option value="P1">⚡ P1 · 高优先级</option>
+                      <option value="P2">🔹 P2 · 常规推进</option>
+                      <option value="P3">🌱 P3 · 低优暂缓</option>
+                    </select>
+                  </label>
+                  <label>状态
+                    <select id="f-status">
+                      <option value="todo">待办</option>
+                      <option value="in_progress">进行中</option>
+                      <option value="blocked">阻塞</option>
+                      <option value="done">完成</option>
+                    </select>
+                  </label>
+                  <label>预估工时（分钟） <input id="f-estimate" type="number" min="0" placeholder="如 60" /></label>
+                  <label>截止时间 <input id="f-due" type="datetime-local" /></label>
+                  <label>计划开始 <input id="f-start" type="datetime-local" /></label>
+                  <label class="span-2">计划结束 <input id="f-end" type="datetime-local" /></label>
+                </div>
+
+                <label class="full">任务描述 <textarea id="f-description" placeholder="补充上下文、执行要点或验收标准…"></textarea></label>
+                <label class="full">分类标签 <input id="f-tags" placeholder="用逗号分隔，例如：产品设计, 本周重点" /></label>
+                <label class="full">子任务拆解 <textarea id="f-subtasks" rows="3" placeholder="每行一条子任务，转正时自动生成可勾选清单"></textarea></label>
+
+                <div class="row-actions">
+                  <button id="btn-promote" class="btn primary pill-btn" type="button">🚀 转为正式任务</button>
+                  <button id="btn-delete-inbox" class="btn danger-ghost pill-btn" type="button">忽略此记录</button>
+                </div>
               </div>
             </div>
           </section>
@@ -167,21 +279,77 @@
       </section>
 
       <section id="view-tasks" class="view hidden" aria-labelledby="page-title">
+        <div class="task-metrics-strip" aria-label="任务统计概览">
+          <div class="metric-card accent-violet">
+            <div class="metric-top">
+              <span class="metric-label">进行中任务</span>
+              <span class="metric-emoji" aria-hidden="true">🚀</span>
+            </div>
+            <strong id="metric-active" class="metric-value">0</strong>
+            <span class="metric-sub">待办 · 推进中 · 阻塞</span>
+          </div>
+          <div class="metric-card accent-amber">
+            <div class="metric-top">
+              <span class="metric-label">高优焦点 (P0/P1)</span>
+              <span class="metric-emoji" aria-hidden="true">🔥</span>
+            </div>
+            <strong id="metric-urgent" class="metric-value">0</strong>
+            <span class="metric-sub">优先集中精力攻克</span>
+          </div>
+          <div class="metric-card accent-rose">
+            <div class="metric-top">
+              <span class="metric-label">已逾期提醒</span>
+              <span class="metric-emoji" aria-hidden="true">⏰</span>
+            </div>
+            <strong id="metric-overdue" class="metric-value">0</strong>
+            <span class="metric-sub">已超过设定截止时间</span>
+          </div>
+          <div class="metric-card accent-emerald">
+            <div class="metric-top">
+              <span class="metric-label">累计已完成</span>
+              <span class="metric-emoji" aria-hidden="true">🎉</span>
+            </div>
+            <strong id="metric-done" class="metric-value">0</strong>
+            <span id="metric-rate" class="metric-sub">含已归档完成项</span>
+          </div>
+        </div>
+
         <div class="view-toolbar task-tabs-toolbar">
           <div class="task-view-toggle" role="tablist" aria-label="任务范围">
-            <button id="tab-active" class="tab active" type="button" role="tab" aria-selected="true">进行中 <span id="count-active" class="tab-count">0</span></button>
-            <button id="tab-completed" class="tab" type="button" role="tab" aria-selected="false">已完成 <span id="count-completed" class="tab-count">0</span></button>
-            <button id="tab-archived" class="tab" type="button" role="tab" aria-selected="false">已归档 <span id="count-archived" class="tab-count">0</span></button>
+            <button id="tab-active" class="tab active" type="button" role="tab" aria-selected="true">
+              <span>进行中</span>
+              <span id="count-active" class="tab-count">0</span>
+            </button>
+            <button id="tab-completed" class="tab" type="button" role="tab" aria-selected="false">
+              <span>已完成</span>
+              <span id="count-completed" class="tab-count">0</span>
+            </button>
+            <button id="tab-archived" class="tab" type="button" role="tab" aria-selected="false">
+              <span>已归档</span>
+              <span id="count-archived" class="tab-count">0</span>
+            </button>
           </div>
-          <button id="btn-new-task" class="btn primary" type="button"><span class="icon icon-plus" aria-hidden="true"></span>新建任务</button>
+          <button id="btn-new-task" class="btn primary pill-btn" type="button">
+            <span class="icon icon-plus" aria-hidden="true"></span>
+            <span>新建任务</span>
+          </button>
         </div>
 
         <section class="surface tasks-surface" aria-label="正式任务列表">
           <div class="task-toolbar">
-            <label class="search-field">
-              <span class="search-icon icon icon-search" aria-hidden="true"></span>
-              <input id="task-filter" type="search" placeholder="搜索任务、描述或标签…" aria-label="搜索任务" autocomplete="off" />
-            </label>
+            <div class="task-toolbar-left">
+              <label class="search-field">
+                <span class="search-icon icon icon-search" aria-hidden="true"></span>
+                <input id="task-filter" type="search" placeholder="搜索任务标题、描述或 #标签…" aria-label="搜索任务" autocomplete="off" />
+              </label>
+              <div id="task-quick-filters" class="filter-pills" role="group" aria-label="优先级与状态快筛">
+                <button class="filter-pill active" data-task-quick="all" type="button">全部</button>
+                <button class="filter-pill" data-task-quick="P0" type="button">🔥 P0</button>
+                <button class="filter-pill" data-task-quick="P1" type="button">⚡ P1</button>
+                <button class="filter-pill" data-task-quick="overdue" type="button">⏰ 已逾期</button>
+                <button class="filter-pill" data-task-quick="subtasks" type="button">☑️ 含子任务</button>
+              </div>
+            </div>
             <span id="tasks-count" class="list-count">0 项任务</span>
           </div>
           <div id="tasks-list" class="list tasks-list"></div>
@@ -194,67 +362,78 @@
     <div class="modal-box settings-box">
       <div class="modal-head">
         <div>
-          <div class="eyebrow">WORKSPACE SETTINGS</div>
-          <h2 id="settings-title">设置</h2>
-          <div class="sub">配置 AI 服务与应用启动行为</div>
+          <div class="eyebrow">PREFERENCES &amp; AI</div>
+          <h2 id="settings-title">AI 服务与偏好设置</h2>
+          <div class="sub">配置模型服务商、DPAPI 加密密钥与开机自启</div>
         </div>
         <button class="icon-btn" type="button" data-modal-close="settings-modal" aria-label="关闭设置">关闭</button>
       </div>
 
       <div class="modal-body">
         <div class="modal-section">
-          <h3>AI 服务</h3>
-          <label class="field">接口协议
-            <select id="s-provider">
-              <option value="openai">OpenAI 兼容（DeepSeek / Kimi / Qwen / GLM / Ollama）</option>
-              <option value="anthropic">Anthropic（Claude 官方 API）</option>
-            </select>
-          </label>
-          <label class="field">API Key
-            <input id="s-api-key" type="password" placeholder="输入新密钥后保存" autocomplete="new-password" />
-            <span id="s-key-state" class="credential-state">未保存 API Key</span>
-            <span class="hint">已保存的密钥不会回填到此输入框。留空表示保持当前密钥；勾选下方选项可明确移除。</span>
-          </label>
-          <label class="check danger-check"><input id="s-remove-key" type="checkbox" /> 移除本机已保存的 API Key</label>
+          <h3>✨ AI 模型服务</h3>
+          <div class="form-grid">
+            <label class="field span-2">接口协议
+              <select id="s-provider">
+                <option value="openai">OpenAI 兼容协议（DeepSeek / Kimi / Qwen / GLM / Ollama）</option>
+                <option value="anthropic">Anthropic 官方协议（Claude Messages API）</option>
+              </select>
+            </label>
+          </div>
+
           <div class="field">
-            <span>Base URL</span>
+            <span>服务地址 (Base URL) 与一键预设</span>
             <div class="preset-row">
               <input id="s-base-url" type="text" placeholder="https://api.deepseek.com" />
               <select id="s-preset" aria-label="常用服务预设">
-                <option value="">常用预设…</option>
+                <option value="">一键填入预设…</option>
                 <option value="deepseek">DeepSeek</option>
                 <option value="openai">OpenAI</option>
-                <option value="moonshot">Kimi</option>
-                <option value="qwen">Qwen</option>
-                <option value="glm">GLM</option>
+                <option value="moonshot">Kimi (Moonshot)</option>
+                <option value="qwen">通义千问 (Qwen)</option>
+                <option value="glm">智谱清言 (GLM)</option>
                 <option value="ollama">Ollama 本地</option>
                 <option value="anthropic">Anthropic</option>
               </select>
             </div>
           </div>
-          <label class="field">模型
-            <input id="s-model" type="text" placeholder="deepseek-v4-flash / claude-sonnet-4-5" />
+
+          <div class="form-grid">
+            <label class="field">主模型（文本提炼）
+              <input id="s-model" type="text" placeholder="deepseek-v4-flash / claude-sonnet-4-5" />
+            </label>
+            <label class="field">视觉模型（图片识别，可选）
+              <input id="s-vision-model" type="text" placeholder="留空则使用主模型" />
+            </label>
+          </div>
+
+          <label class="field">API Key 密钥
+            <div class="key-input-row">
+              <input id="s-api-key" type="password" placeholder="输入新密钥后保存（留空则保留现有密钥）" autocomplete="new-password" />
+              <span id="s-key-state" class="credential-state">未保存 API Key</span>
+            </div>
+            <span class="hint">密钥通过 Windows DPAPI 加密存储在本机，前端界面永远不会回填明文密钥。</span>
           </label>
-          <label class="field">视觉模型（图片解析）
-            <input id="s-vision-model" type="text" placeholder="留空则使用主模型" />
-          </label>
-          <label class="check"><input id="s-disable-reasoning" type="checkbox" /> 图片解析时关闭模型思考/推理</label>
+
+          <label class="check danger-check"><input id="s-remove-key" type="checkbox" /> 明确清除本机已保存的 API Key</label>
+          <label class="check"><input id="s-disable-reasoning" type="checkbox" /> 图片解析时关闭模型思考/推理链（防止思维链耗尽输出预算）</label>
+
           <div class="service-note">
-            <div class="service-note-title">数据发送说明</div>
-            <p>启用 AI 整理后，文字、附言和图片会发送给你选择的 AI 服务，用于生成结构化建议。API Key 只保存在本机，并由 Windows 账户保护的应用设置承载；这里不会回填密钥。</p>
+            <div class="service-note-title">🔒 本地隐私与数据安全</div>
+            <p>开启 AI 解析后，仅当前记录的文本或图片会发送至你所选的服务地址。数据库快照、附件图片与密钥均由当前 Windows 登录账户加密保护。</p>
           </div>
         </div>
 
         <div class="modal-section">
-          <h3>通用</h3>
-          <label class="check"><input id="s-auto-parse" type="checkbox" /> 记录后自动调用 AI 解析</label>
-          <label class="check"><input id="s-autostart" type="checkbox" /> 开机自启（登录 Windows 后运行到托盘）</label>
+          <h3>⚡ 自动化与系统行为</h3>
+          <label class="check"><input id="s-auto-parse" type="checkbox" /> 保存记录后自动触发 AI 智能解析</label>
+          <label class="check"><input id="s-autostart" type="checkbox" /> 登录 Windows 时开机自启并驻留系统托盘</label>
         </div>
       </div>
 
       <div class="modal-foot">
-        <button id="btn-close-settings" class="btn secondary" type="button">取消</button>
-        <button id="btn-save-settings" class="btn primary" type="button">保存设置</button>
+        <button id="btn-close-settings" class="btn secondary pill-btn" type="button">取消</button>
+        <button id="btn-save-settings" class="btn primary pill-btn" type="button">保存设置</button>
       </div>
     </div>
   </div>
@@ -263,7 +442,7 @@
     <div class="modal-box task-box">
       <div class="modal-head">
         <div>
-          <div class="eyebrow">TASK EDITOR</div>
+          <div class="eyebrow">TASK COMPOSER</div>
           <h2 id="e-modal-title">编辑任务</h2>
           <div class="sub" id="e-meta"></div>
         </div>
@@ -272,36 +451,54 @@
 
       <div class="modal-body">
         <div class="modal-section">
-          <h3>基本信息</h3>
+          <h3>基本信息与排期</h3>
+          <label class="hero-title-field">
+            <span class="field-caption">任务标题</span>
+            <input id="e-title" class="hero-title-input" autocomplete="off" placeholder="输入清晰的任务标题…" />
+          </label>
           <div class="form-grid">
-            <label>标题 <input id="e-title" autocomplete="off" /></label>
             <label>类型
-              <select id="e-kind"><option value="task">任务</option><option value="requirement">需求</option><option value="idea">想法</option><option value="note">记录</option></select>
+              <select id="e-kind">
+                <option value="task">🎯 任务 (Task)</option>
+                <option value="requirement">📦 需求 (Requirement)</option>
+                <option value="idea">💡 想法 (Idea)</option>
+                <option value="note">📝 记录 (Note)</option>
+              </select>
             </label>
             <label>状态
-              <select id="e-status"><option value="todo">待办</option><option value="in_progress">进行中</option><option value="blocked">阻塞</option><option value="done">完成</option></select>
+              <select id="e-status">
+                <option value="todo">待办</option>
+                <option value="in_progress">进行中</option>
+                <option value="blocked">阻塞</option>
+                <option value="done">完成</option>
+              </select>
             </label>
             <label>优先级
-              <select id="e-priority"><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
+              <select id="e-priority">
+                <option value="P0">🔥 P0 · 紧急关键</option>
+                <option value="P1">⚡ P1 · 高优先级</option>
+                <option value="P2">🔹 P2 · 常规推进</option>
+                <option value="P3">🌱 P3 · 低优暂缓</option>
+              </select>
             </label>
             <label>截止时间 <input id="e-due" type="datetime-local" /></label>
             <label>预估工时（分钟） <input id="e-estimate" type="number" min="0" /></label>
             <label id="e-actual-field">实际工时（分钟） <input id="e-actual" type="number" min="0" /></label>
-            <label id="e-progress-field">进度（0–100） <input id="e-progress" type="number" min="0" max="100" /></label>
+            <label id="e-progress-field">完成进度（0–100%） <input id="e-progress" type="number" min="0" max="100" /></label>
             <label>计划开始 <input id="e-start" type="datetime-local" /></label>
             <label>计划结束 <input id="e-end" type="datetime-local" /></label>
           </div>
-          <label class="full">描述 <textarea id="e-description"></textarea></label>
-          <label class="full">标签 <input id="e-tags" placeholder="逗号分隔" /></label>
+          <label class="full">详细描述 <textarea id="e-description" placeholder="补充任务背景、交付物或注意事项…"></textarea></label>
+          <label class="full">标签 <input id="e-tags" placeholder="逗号分隔，例如：产品设计, 本周重点" /></label>
         </div>
 
         <div class="modal-section">
-          <h3>子任务</h3>
+          <h3>☑️ 子任务清单</h3>
           <div id="e-subtasks-zone">
             <div id="e-subtasks" class="subtask-list"></div>
             <div class="subtask-add">
-              <input id="e-subtask-new" type="text" placeholder="新增子任务，回车或点添加" />
-              <button id="e-subtask-add" class="btn small" type="button">添加</button>
+              <input id="e-subtask-new" type="text" placeholder="添加一个新的执行步骤，回车即可保存…" />
+              <button id="e-subtask-add" class="btn small primary pill-btn" type="button">添加步骤</button>
             </div>
           </div>
           <textarea id="e-subtasks-new" class="hidden" rows="3" placeholder="每行一条子任务（可选）"></textarea>
@@ -309,8 +506,8 @@
       </div>
 
       <div class="modal-foot">
-        <button id="btn-close-task" class="btn secondary" type="button">取消</button>
-        <button id="btn-save-task" class="btn primary" type="button">保存修改</button>
+        <button id="btn-close-task" class="btn secondary pill-btn" type="button">取消</button>
+        <button id="btn-save-task" class="btn primary pill-btn" type="button">保存修改</button>
       </div>
     </div>
   </div>

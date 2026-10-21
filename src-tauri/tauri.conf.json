@@ -19,8 +19,7 @@
         "visible": false,
         "center": true,
         "decorations": false,
-        "theme": "Dark",
-        "backgroundColor": "#191a20",
+        "backgroundColor": "#f2f4fa",
         "url": "index.html"
       },
       {
@@ -35,7 +34,7 @@
         "skipTaskbar": true,
         "resizable": false,
         "focus": false,
-        "backgroundColor": "#191a20",
+        "backgroundColor": "#f6f8fd",
         "url": "quick.html"
       }
     ],

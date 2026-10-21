@@ -12,17 +12,26 @@ const listen = tauri?.event?.listen
 let pendingImage = null;
 let saving = false;
 
+function syncQuickTheme() {
+  try {
+    const saved = window.localStorage?.getItem("taskvault-theme") || "light";
+    document.documentElement.setAttribute("data-theme", saved === "dark" ? "dark" : "light");
+  } catch {
+    document.documentElement.setAttribute("data-theme", "light");
+  }
+}
+
 function setStatus(message, isError = false) {
   const status = document.getElementById("status");
   status.textContent = message;
-  status.style.color = isError ? "#ef767b" : "";
+  status.style.color = isError ? "#f43f5e" : "";
 }
 
 function setSaveBusy(busy) {
   const button = document.getElementById("btn-save");
   button.disabled = busy;
   button.setAttribute("aria-busy", String(busy));
-  button.textContent = busy ? "保存中…" : "保存记录";
+  button.textContent = busy ? "保存中…" : "✨ 保存记录";
 }
 
 function setImage(dataUrl) {
@@ -89,6 +98,9 @@ async function hideQuickWindow() {
 
 if (typeof document !== "undefined") {
   document.addEventListener("DOMContentLoaded", () => {
+    syncQuickTheme();
+    window.addEventListener("focus", syncQuickTheme);
+    window.addEventListener("storage", syncQuickTheme);
     const input = document.getElementById("task-input");
     document.getElementById("btn-save").addEventListener("click", save);
     document.getElementById("btn-cancel").addEventListener("click", hideQuickWindow);
