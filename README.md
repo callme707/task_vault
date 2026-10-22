@@ -137,12 +137,41 @@ flowchart LR
 
 ## 快速开始
 
-### 环境要求
-- **操作系统**：Windows 10 / 11 (x64)，内置 Microsoft Edge WebView2 运行时
-- **Rust 工具链**：`rustc >= 1.77.2`（建议使用最新 stable 工具链）
-- **Node.js**（可选）：用于运行前端回归单元测试与独立沙盒预览服务器
+### 1. 直接下载运行（普通用户推荐）
 
-### 开发与构建命令
+无需配置任何编译环境，请直接前往 **[GitHub Releases](https://github.com/callme707/task_vault/releases/latest)** 下载最新正式版：
+
+| 发行资产文件 | 适用场景 |
+| :--- | :--- |
+| **`TaskVault_1.2.0_x64-setup.exe`** | **推荐**：标准 Windows NSIS 安装程序（支持桌面快捷方式与卸载向导） |
+| **`TaskVault_1.2.0_x64_en-US.msi`** | 企业级 Windows Installer (MSI) 安装包 |
+| **`TaskVault_1.2.0_x64-portable.exe`** | 免安装单文件便携版（下载后直接双击即可运行） |
+
+---
+
+### 2. 源码构建与一键环境配置（开发者）
+
+仓库根目录已提供标准环境声明文件与一键环境配置脚本：
+- [`rust-toolchain.toml`](rust-toolchain.toml)：声明 Rust `stable-x86_64-pc-windows-msvc` 工具链及 `clippy`、`rustfmt` 组件依赖。
+- [`package.json`](package.json)：声明 Node.js（`>= 18.0.0`）运行要求与常用工程脚本（`npm run setup`、`npm run doctor`、`npm test` 等）。
+- [`src-tauri/Cargo.toml`](src-tauri/Cargo.toml) & [`src-tauri/Cargo.lock`](src-tauri/Cargo.lock)：锁定的 Rust 后端依赖清单。
+
+#### 一键环境检测与自动安装
+
+双击运行根目录的 [`setup-env.bat`](setup-env.bat)，或在 PowerShell 中执行以下命令，脚本将自动检测 **WebView2 Runtime、MSVC C++ Build Tools、Rust 工具链、Tauri CLI 与 Node.js**，并可通过 `winget` / `rustup` / `cargo` 自动补齐缺失组件：
+
+```powershell
+# 交互式一键检测并自动安装缺失环境（或直接双击 setup-env.bat）
+.\setup-env.bat
+
+# 仅执行环境健康检查（输出组件版本状态表，不执行安装）
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-env.ps1 -CheckOnly
+
+# 无人值守全自动安装所有缺失依赖
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-env.ps1 -Yes
+```
+
+#### 开发与构建命令
 
 ```powershell
 # 1. 进入 Tauri 后端目录并启动开发模式
