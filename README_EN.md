@@ -137,12 +137,41 @@ flowchart LR
 
 ## Getting Started
 
-### Prerequisites
-- **OS**: Windows 10 / 11 (x64) with Microsoft Edge WebView2 Runtime
-- **Rust Toolchain**: `rustc >= 1.77.2` (latest stable recommended)
-- **Node.js** (optional): Required only for running frontend unit tests and the standalone synthetic preview server
+### 1. Direct Download (Recommended for End Users)
 
-### Build & Development Commands
+No build tools required—download the latest pre-built Windows binaries directly from **[GitHub Releases](https://github.com/callme707/task_vault/releases/latest)**:
+
+| Release Asset | Description |
+| :--- | :--- |
+| **`TaskVault_1.2.0_x64-setup.exe`** | **Recommended**: Standard Windows NSIS installer with shortcuts and uninstaller |
+| **`TaskVault_1.2.0_x64_en-US.msi`** | Windows Installer (MSI) package |
+| **`TaskVault_1.2.0_x64-portable.exe`** | Standalone portable executable (run directly without installation) |
+
+---
+
+### 2. Build from Source & One-Click Environment Setup (Developers)
+
+The repository root includes standard environment manifests and an automated setup wizard:
+- [`rust-toolchain.toml`](rust-toolchain.toml): Pins the `stable-x86_64-pc-windows-msvc` toolchain along with `clippy` and `rustfmt`.
+- [`package.json`](package.json): Declares Node.js (`>= 18.0.0`) engine requirements and convenient workspace scripts (`npm run setup`, `npm run doctor`, `npm test`, etc.).
+- [`src-tauri/Cargo.toml`](src-tauri/Cargo.toml) & [`src-tauri/Cargo.lock`](src-tauri/Cargo.lock): Locked Rust backend dependency graph.
+
+#### One-Click Environment Doctor & Auto-Installer
+
+Double-click [`setup-env.bat`](setup-env.bat) at the repository root (or run it from PowerShell) to automatically inspect **WebView2 Runtime, MSVC C++ Build Tools, Rust Toolchain, Tauri CLI, and Node.js**, and install any missing prerequisites via `winget`, `rustup`, and `cargo`:
+
+```powershell
+# Interactive check & automatic installation of missing prerequisites
+.\setup-env.bat
+
+# Diagnostics only (prints component status table without installing)
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-env.ps1 -CheckOnly
+
+# Unattended installation of all missing prerequisites
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-env.ps1 -Yes
+```
+
+#### Build & Development Commands
 
 ```powershell
 # 1. Start in development mode

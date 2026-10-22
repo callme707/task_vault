@@ -1,0 +1,23 @@
+{
+  "name": "task-vault",
+  "version": "1.2.0",
+  "private": true,
+  "description": "Local-first, AI-powered desktop inbox and task management workbench for Windows (Rust + Tauri 2 + Vanilla JS)",
+  "license": "ISC",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "setup": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-env.ps1",
+    "doctor": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/setup-env.ps1 -CheckOnly",
+    "preview": "node scripts/preview.cjs",
+    "check": "node --check ui/main.js && node --check ui/quick.js",
+    "test:ui": "node ui/tests/time-format.test.js && node ui/tests/task-views.test.js",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml --locked",
+    "test": "npm run check && npm run test:ui && npm run test:rust",
+    "lint": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings",
+    "dev": "cargo run --manifest-path src-tauri/Cargo.toml",
+    "build": "cargo build --manifest-path src-tauri/Cargo.toml --release --locked",
+    "bundle": "cd src-tauri && cargo tauri build --ci --bundles nsis,msi -- --locked"
+  }
+}
