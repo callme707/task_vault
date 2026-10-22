@@ -13,6 +13,7 @@ const listen = tauri?.event?.listen
 const state = {
   inbox: [],
   inboxFilter: "all",
+  inboxSearch: "",
   tasks: [],
   taskBuckets: { active: [], completed: [], archived: [] },
   taskCounts: { active: 0, completed: 0, archived: 0 },
@@ -25,6 +26,7 @@ const state = {
   editingId: null,
   view: "inbox",
   inboxDrafts: new Map(),
+  checkedDraftSteps: new Map(),
   busy: new Set(),
   refreshPromise: null,
   detailRenderToken: 0,
@@ -37,14 +39,15 @@ const state = {
   knownTaskIds: new Set(),
   lastInboxItemsSig: "",
   lastTaskRenderSig: "",
+  didAutoSelectInitial: false,
 };
 
 const statusText = {
   queued: "排队中",
   pending: "待解析",
   processing: "解析中",
-  done: "已解析",
-  partial: "结果待核对",
+  done: "待确认",
+  partial: "待核对",
   failed: "解析失败",
   skipped: "已跳过",
   unconfigured: "未配置 Key",
@@ -69,6 +72,13 @@ const personaText = {
   dev: "💻 研发专家",
   pm: "📋 产品项目",
   gtd: "🎯 GTD 行动",
+};
+
+const priorityFriendlyText = {
+  P0: "紧急优先级",
+  P1: "高优先级",
+  P2: "中优先级",
+  P3: "低优先级",
 };
 
 const taskViews = ["active", "completed", "archived"];
@@ -120,12 +130,12 @@ function taskAfterAction(task, action) {
 const viewCopy = {
   inbox: {
     kicker: "INBOX STUDIO",
-    title: "灵感收集箱",
+    title: "收集箱",
     subtitle: "随手收集一句话或截图，AI 自动提炼结构化草稿，由你确认入库。",
   },
   tasks: {
     kicker: "TASK BOARD",
-    title: "正式任务看板",
+    title: "任务",
     subtitle: "把确认过的事项放入看板，轻快推进直至达成。",
   },
 };
@@ -239,6 +249,98 @@ function dtToIso(value) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function getRelativeDateHeading(value) {
+  const date = asDate(value);
+  if (!date) return "更早";
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const itemStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const diffDays = Math.round((itemStart - todayStart) / 86400000);
+  if (diffDays === 0) return "今天";
+  if (diffDays === -1) return "昨天";
+  if (diffDays === -2) return "前天";
+  if (date.getFullYear() === now.getFullYear()) {
+    return `${date.getMonth() + 1}月${date.getDate()}日`;
+  }
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+function formatFriendlyDeadline(value) {
+  const date = asDate(value);
+  if (!date) {
+    return { main: "未设截止", sub: "（点击设置）" };
+  }
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const targetStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const diffDays = Math.round((targetStart - todayStart) / 86400000);
+  const hh = String(date.getHours()).padStart(2, "0");
+  const mm = String(date.getMinutes()).padStart(2, "0");
+  const timeStr = `${hh}:${mm}`;
+  const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const weekday = weekdays[date.getDay()];
+
+  let main = `${month}月${day}日 ${timeStr}`;
+  if (diffDays === 0) main = `今天 ${timeStr}`;
+  else if (diffDays === 1) main = `明天 ${timeStr}`;
+  else if (diffDays === 2) main = `后天 ${timeStr}`;
+  else if (diffDays === -1) main = `昨天 ${timeStr}`;
+
+  return {
+    main,
+    sub: `（${month}月${day}日 ${weekday}）`,
+  };
+}
+
+function cnItemCountWord(n) {
+  if (n === 2) return "两";
+  const map = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
+  return map[n] || String(n);
+}
+
+function splitInboxCardCopy(item) {
+  const ai = parseAiResult(item?.ai_result);
+  const items = aiItemsFor(item);
+  const raw = String(item?.raw_text || "").trim();
+
+  if (raw) {
+    const match = raw.match(/^([^，。：:；;\n]{2,26})[，。：:；;\n]+\s*(.+)$/s);
+    if (match) {
+      return {
+        title: match[1].trim(),
+        subtitle: match[2].replace(/\s+/g, " ").trim(),
+      };
+    }
+    let subtitle = "";
+    if (hasAiItemList(item) && items.length > 1) {
+      subtitle = `图片中有${cnItemCountWord(items.length)}个待办事项`;
+    } else if (ai?.summary && ai.summary.trim() !== raw) {
+      subtitle = ai.summary.trim();
+    } else if (ai?.description && ai.description.trim() !== raw) {
+      subtitle = ai.description.trim();
+    } else if (item?.image_path) {
+      subtitle = "包含图片附件";
+    } else {
+      subtitle = statusText[item?.ai_status] || "待确认";
+    }
+    return { title: raw, subtitle };
+  }
+
+  if (hasAiItemList(item) && items.length > 1) {
+    return {
+      title: items[0]?.title || "截图待办记录",
+      subtitle: `图片中有${cnItemCountWord(items.length)}个待办事项`,
+    };
+  }
+
+  return {
+    title: ai?.title || (item?.image_path ? "图片附件记录" : "无文字内容"),
+    subtitle: ai?.summary || ai?.description || (item?.image_path ? "包含图片附件" : "待处理记录"),
+  };
 }
 
 /* ===== 通用 UI 工具 ===== */
@@ -438,13 +540,21 @@ function switchView(view) {
   inboxView?.classList.toggle("hidden", view !== "inbox");
   tasksView?.classList.toggle("hidden", view !== "tasks");
   document.getElementById("btn-process-pending")?.classList.toggle("hidden", view !== "inbox");
-  document.getElementById("page-kicker").textContent = viewCopy[view].kicker;
-  document.getElementById("page-title").textContent = viewCopy[view].title;
-  document.getElementById("page-subtitle").textContent = viewCopy[view].subtitle;
+  const pageKicker = document.getElementById("page-kicker");
+  const pageTitle = document.getElementById("page-title");
+  const pageSubtitle = document.getElementById("page-subtitle");
+  if (pageKicker) pageKicker.textContent = viewCopy[view].kicker;
+  if (pageTitle) pageTitle.textContent = viewCopy[view].title;
+  if (pageSubtitle) pageSubtitle.textContent = viewCopy[view].subtitle;
+
+  const globalSearch = document.getElementById("inbox-search");
+  if (globalSearch) {
+    globalSearch.placeholder = view === "inbox" ? "搜索收集箱..." : "搜索任务...";
+    globalSearch.value = view === "inbox" ? state.inboxSearch : state.taskFilter;
+  }
 
   const targetView = view === "inbox" ? inboxView : tasksView;
   replayAnimation(targetView, "view-entering");
-  replayAnimation(document.querySelector(".topbar-titles"), "title-switching");
 
   if (prevView !== view) {
     if (view === "inbox") {
@@ -458,11 +568,17 @@ function switchView(view) {
 }
 
 function inboxMatchesFilter(item) {
+  const query = state.inboxSearch.trim().toLowerCase();
+  if (query) {
+    const ai = parseAiResult(item.ai_result);
+    const haystack = `${item.raw_text || ""}\n${ai?.title || ""}\n${ai?.summary || ""}\n${ai?.description || ""}`.toLowerCase();
+    if (!haystack.includes(query)) return false;
+  }
   const filter = state.inboxFilter;
   if (!filter || filter === "all") return true;
   if (filter === "unpromoted") {
     const { promoted, total } = promotionCounts(item);
-    return promoted < total;
+    return promoted < total || ["pending", "queued", "processing", "failed", "partial", "unconfigured"].includes(item.ai_status);
   }
   if (filter === "image") return Boolean(item.image_path);
   if (filter === "attention") {
@@ -476,7 +592,11 @@ function renderInbox() {
   const count = document.getElementById("inbox-count");
   const navCount = document.getElementById("nav-inbox-count");
   const shown = state.inbox.filter(inboxMatchesFilter);
-  if (count) count.textContent = state.inboxFilter === "all" ? `${state.inbox.length} 条记录` : `${shown.length} / ${state.inbox.length} 条记录`;
+  if (count) {
+    count.textContent = state.inboxFilter === "all" && !state.inboxSearch.trim()
+      ? String(state.inbox.length)
+      : String(shown.length);
+  }
   if (navCount) navCount.textContent = String(state.inbox.length);
   updateWorkspacePulse();
   if (!list) return;
@@ -484,14 +604,14 @@ function renderInbox() {
     state.lastInboxItemsSig = "empty";
     state.animateInboxList = false;
     list.innerHTML = state.inbox.length
-      ? '<div class="empty">当前筛选条件下没有记录<br /><strong>可切换上方筛选胶囊查看全部记录</strong></div>'
-      : '<div class="empty">还没有临时记录<br /><strong>按 Ctrl + Alt + Q 快速记录文字或粘贴截图</strong></div>';
+      ? '<div class="empty">当前筛选条件下没有记录<br /><strong>可切换上方「全部」查看所有收集记录</strong></div>'
+      : '<div class="empty">还没有收集箱记录<br /><strong>按 Ctrl + Alt + Q 快速记录文字或粘贴截图</strong></div>';
     return;
   }
 
-  const itemsSig = shown.map((item) => {
+  const itemsSig = `${state.inboxFilter}:${state.inboxSearch.trim()}:` + shown.map((item) => {
     const { promoted, total } = promotionCounts(item);
-    return `${item.id}:${item.ai_status}:${promoted}/${total}:${item.raw_text || ""}:${item.image_path ? 1 : 0}`;
+    return `${item.id}:${item.ai_status}:${promoted}/${total}:${item.raw_text || ""}:${item.ai_result || ""}:${item.image_path ? 1 : 0}`;
   }).join("|");
 
   // If only selection changed (or 4s background poll had no inbox changes),
@@ -507,26 +627,33 @@ function renderInbox() {
   state.animateInboxList = false;
   state.lastInboxItemsSig = itemsSig;
 
-  list.innerHTML = shown.map((item, idx) => {
-    const { promoted, total } = promotionCounts(item);
-    const promotion = promoted
-      ? `<span class="badge promoted">${promoted}/${total} 已转正</span>`
-      : hasAiItemList(item) ? `<span class="row-count">识别 ${total} 项</span>` : "";
-    const imageMark = item.image_path ? '<span class="image-label">截图</span>' : "";
-    const title = item.raw_text || (item.image_path ? "图片附件记录" : "无文字内容");
+  let lastGroupHeading = null;
+  const htmlChunks = [];
+
+  shown.forEach((item, idx) => {
+    const groupHeading = getRelativeDateHeading(item.created_at);
+    if (groupHeading !== lastGroupHeading) {
+      lastGroupHeading = groupHeading;
+      htmlChunks.push(`<div class="inbox-date-header">${esc(groupHeading)}</div>`);
+    }
+    const { title, subtitle } = splitInboxCardCopy(item);
     const active = item.id === state.selectedId;
     const statusCls = item.ai_status || "pending";
     const enterCls = (shouldCascade || !state.knownInboxIds.has(item.id)) ? "card-enter" : "";
-    return `
+    const timeLabel = formatTime(item.created_at);
+    htmlChunks.push(`
       <article class="inbox-row st-${esc(statusCls)} ${active ? "active" : ""} ${enterCls}" style="--i:${Math.min(idx, 12)}" data-id="${item.id}" tabindex="0" role="button" aria-label="打开记录：${esc(title)}">
         <div class="inbox-row-main">
-          <div class="inbox-row-kicker"><span class="source-pill">${esc(sourceText(item.source))}</span><time datetime="${esc(item.created_at)}">${esc(formatDateTime(item.created_at))}</time></div>
-          <div class="inbox-row-title">${imageMark}${esc(title)}</div>
-          <div class="inbox-row-meta"><span class="badge ${esc(statusCls)}">${esc(statusText[item.ai_status] || item.ai_status || "未知状态")}</span>${promotion}</div>
+          <div class="inbox-row-top">
+            <div class="inbox-row-title">${esc(title)}</div>
+            <time class="inbox-row-time" datetime="${esc(item.created_at)}">${esc(timeLabel)}</time>
+          </div>
+          <div class="inbox-row-sub">${esc(subtitle)}</div>
         </div>
-      </article>`;
-  }).join("");
+      </article>`);
+  });
 
+  list.innerHTML = htmlChunks.join("");
   state.knownInboxIds = new Set(state.inbox.map((item) => item.id));
 
   list.querySelectorAll(".inbox-row").forEach((row) => {
@@ -612,7 +739,7 @@ function renderTasks() {
       ? "暂无已归档任务"
       : state.taskView === "completed"
         ? "暂无已完成任务"
-        : "暂无进行中任务<br /><strong>从记录区确认转入，或点击右上角新建正式任务</strong>";
+        : "暂无进行中任务<br /><strong>从收集箱确认加入，或点击右上角新建正式任务</strong>";
     list.innerHTML = `<div class="empty">${hasFilter ? "没有匹配当前筛选条件的任务" : empty}</div>`;
     return;
   }
@@ -658,7 +785,7 @@ function renderTasks() {
             ${due}${planned}
             ${task.estimate_minutes ? `<span>预估 ${esc(task.estimate_minutes)} 分钟</span>` : ""}
             ${task.actual_minutes ? `<span>实际 ${esc(task.actual_minutes)} 分钟</span>` : ""}
-            ${subtasks.length ? `<span>子任务 ${doneCount}/${subtasks.length}</span>` : ""}
+            ${subtasks.length ? `<span>步骤 ${doneCount}/${subtasks.length}</span>` : ""}
             ${tagLine}
           </div>
           ${progress}
@@ -803,13 +930,181 @@ function setTaskView(view) {
   refreshTasks().catch((error) => showError(`任务刷新失败：${errorText(error)}`));
 }
 
-/* ===== 记录区检查器与草稿 ===== */
+/* ===== 收集箱四卡式检查器与草稿同步 ===== */
 function selectedInboxItem() {
   return state.inbox.find((item) => item.id === state.selectedId) || null;
 }
 
 function draftKeyFor(item, index = state.selectedItemIndex) {
   return `${item.id}:${itemKeyFor(item, index) || `ui-item-${index}`}`;
+}
+
+function syncFriendlyDeadlineUi() {
+  const dueInput = document.getElementById("f-due");
+  const mainEl = document.getElementById("due-friendly-main");
+  const subEl = document.getElementById("due-friendly-sub");
+  const dateInput = document.getElementById("f-due-date");
+  const timeInput = document.getElementById("f-due-time");
+  if (!dueInput || !mainEl || !subEl) return;
+  const raw = dueInput.value || "";
+  const { main, sub } = formatFriendlyDeadline(raw);
+  mainEl.textContent = main;
+  subEl.textContent = sub;
+  if (dateInput && timeInput) {
+    if (raw && raw.includes("T")) {
+      const [dPart, tPart] = raw.split("T");
+      dateInput.value = dPart || "";
+      timeInput.value = (tPart || "18:00").slice(0, 5);
+    } else {
+      dateInput.value = "";
+      timeInput.value = "18:00";
+    }
+  }
+}
+
+function computePresetDueLocal(preset) {
+  const now = new Date();
+  const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0, 0, 0);
+  if (preset === "today-18") {
+    target.setHours(18, 0, 0, 0);
+  } else if (preset === "tomorrow-10") {
+    target.setDate(target.getDate() + 1);
+    target.setHours(10, 0, 0, 0);
+  } else if (preset === "tomorrow-18") {
+    target.setDate(target.getDate() + 1);
+    target.setHours(18, 0, 0, 0);
+  } else if (preset === "friday-18") {
+    const day = target.getDay();
+    const diff = day <= 5 ? (5 - day || 7) : (5 + 7 - day);
+    target.setDate(target.getDate() + diff);
+    target.setHours(18, 0, 0, 0);
+  } else if (preset === "monday-10") {
+    const day = target.getDay();
+    const diff = day === 0 ? 1 : (8 - day);
+    target.setDate(target.getDate() + diff);
+    target.setHours(10, 0, 0, 0);
+  }
+  const yyyy = target.getFullYear();
+  const mm = String(target.getMonth() + 1).padStart(2, "0");
+  const dd = String(target.getDate()).padStart(2, "0");
+  const hh = String(target.getHours()).padStart(2, "0");
+  const min = String(target.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+
+function syncFriendlyPriorityUi() {
+  const prioSelect = document.getElementById("f-priority");
+  const labelEl = document.getElementById("priority-friendly-label");
+  const wrapEl = document.getElementById("priority-picker-trigger") || prioSelect?.closest(".meta-priority");
+  if (!prioSelect || !labelEl) return;
+  const val = prioSelect.value || "P2";
+  labelEl.textContent = priorityFriendlyText[val] || "中优先级";
+  if (wrapEl) {
+    wrapEl.classList.remove("prio-P0", "prio-P1", "prio-P2", "prio-P3");
+    wrapEl.classList.add(`prio-${val}`);
+  }
+  document.querySelectorAll("#priority-popover .priority-option").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.prio === val);
+  });
+}
+
+function syncSubtasksTextareaFromStepsDom() {
+  const listEl = document.getElementById("draft-steps-list");
+  const textarea = document.getElementById("f-subtasks");
+  if (!listEl || !textarea) return;
+  const lines = [...listEl.querySelectorAll(".draft-step-input")]
+    .map((input) => input.value.trim())
+    .filter(Boolean);
+  textarea.value = lines.join("\n");
+  markInboxDraftDirty();
+}
+
+function renderDraftStepsList() {
+  const listEl = document.getElementById("draft-steps-list");
+  const textarea = document.getElementById("f-subtasks");
+  if (!listEl || !textarea) return;
+  const item = selectedInboxItem();
+  const dKey = item ? draftKeyFor(item) : "default";
+  if (!state.checkedDraftSteps.has(dKey)) {
+    state.checkedDraftSteps.set(dKey, new Set());
+  }
+  const checkedSet = state.checkedDraftSteps.get(dKey);
+
+  const lines = textarea.value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) {
+    listEl.innerHTML = '<div class="draft-steps-empty">暂无拆解步骤，点击右上角「+ 添加步骤」补充执行清单</div>';
+    return;
+  }
+
+  listEl.innerHTML = lines.map((stepText, idx) => {
+    const isChecked = checkedSet.has(idx);
+    return `
+      <div class="draft-step-row ${isChecked ? "is-checked" : ""}" data-step-index="${idx}" role="listitem">
+        <button class="step-circle-btn" type="button" aria-label="勾选步骤" aria-pressed="${isChecked}">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </button>
+        <input class="draft-step-input" type="text" value="${esc(stepText)}" aria-label="执行步骤 ${idx + 1}" />
+        <button class="step-remove-btn" type="button" title="移除此步骤" aria-label="移除步骤">×</button>
+      </div>`;
+  }).join("");
+
+  listEl.querySelectorAll(".draft-step-row").forEach((row) => {
+    const idx = Number(row.dataset.stepIndex);
+    const circleBtn = row.querySelector(".step-circle-btn");
+    const stepInput = row.querySelector(".draft-step-input");
+    const removeBtn = row.querySelector(".step-remove-btn");
+
+    circleBtn?.addEventListener("click", () => {
+      if (checkedSet.has(idx)) checkedSet.delete(idx);
+      else checkedSet.add(idx);
+      const nowChecked = checkedSet.has(idx);
+      row.classList.toggle("is-checked", nowChecked);
+      circleBtn.setAttribute("aria-pressed", String(nowChecked));
+    });
+
+    stepInput?.addEventListener("input", () => {
+      syncSubtasksTextareaFromStepsDom();
+    });
+
+    stepInput?.addEventListener("keydown", (event) => {
+      if (event.isComposing || event.keyCode === 229) return;
+      if (event.key === "Enter") {
+        event.preventDefault();
+        addDraftStep("");
+      }
+    });
+
+    removeBtn?.addEventListener("click", () => {
+      row.remove();
+      syncSubtasksTextareaFromStepsDom();
+      renderDraftStepsList();
+    });
+  });
+}
+
+function addDraftStep(initialText = "新执行步骤") {
+  const textarea = document.getElementById("f-subtasks");
+  if (!textarea) return;
+  const current = textarea.value
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  current.push(initialText || "新执行步骤");
+  textarea.value = current.join("\n");
+  markInboxDraftDirty();
+  renderDraftStepsList();
+  const inputs = document.querySelectorAll("#draft-steps-list .draft-step-input");
+  const lastInput = inputs[inputs.length - 1];
+  if (lastInput) {
+    lastInput.focus();
+    lastInput.select();
+  }
 }
 
 function readInboxDraft() {
@@ -828,6 +1123,13 @@ function readInboxDraft() {
   };
 }
 
+function autoResizeHeroDesc() {
+  const desc = document.getElementById("f-description");
+  if (!desc) return;
+  desc.style.height = "auto";
+  desc.style.height = `${Math.max(desc.scrollHeight, 26)}px`;
+}
+
 function applyInboxDraft(values) {
   document.getElementById("f-title").value = values.title || "";
   document.getElementById("f-kind").value = values.kind || "task";
@@ -840,6 +1142,10 @@ function applyInboxDraft(values) {
   document.getElementById("f-description").value = values.description || "";
   document.getElementById("f-tags").value = values.tags || "";
   document.getElementById("f-subtasks").value = values.subtasks || "";
+  autoResizeHeroDesc();
+  syncFriendlyDeadlineUi();
+  syncFriendlyPriorityUi();
+  renderDraftStepsList();
 }
 
 function saveCurrentInboxDraft() {
@@ -871,7 +1177,7 @@ function fillDraftFromItem(ai, item, index) {
     estimate: ai?.estimate_minutes ?? "",
     start: "",
     end: "",
-    description: ai?.description || item.raw_text || "",
+    description: ai?.summary || ai?.description || item.raw_text || "",
     tags: safeArray(ai?.tags).join(", "),
     subtasks: safeArray(ai?.subtasks).join("\n"),
   });
@@ -880,11 +1186,32 @@ function fillDraftFromItem(ai, item, index) {
 function updatePromotionUi(item, index) {
   const button = document.getElementById("btn-promote");
   const note = document.getElementById("f-item-state");
+  const statusPill = document.getElementById("ai-status");
   const key = itemKeyFor(item, index);
   const promoted = isItemPromoted(item, index);
   const { promoted: promotedCount, total } = promotionCounts(item);
   const progress = document.getElementById("promotion-progress");
-  if (progress) progress.textContent = total > 1 ? `已转为正式任务 ${promotedCount}/${total}` : promoted ? "已转为正式任务" : "待转为正式任务";
+
+  if (progress) {
+    if (total > 1) {
+      progress.textContent = `${promotedCount}/${total} 已加入`;
+      progress.classList.remove("hidden");
+    } else {
+      progress.textContent = "";
+      progress.classList.add("hidden");
+    }
+  }
+
+  if (statusPill) {
+    if (promoted) {
+      statusPill.textContent = "已加入任务";
+      statusPill.className = "draft-state-pill promoted";
+    } else {
+      statusPill.textContent = statusText[item.ai_status] || item.ai_status || "待确认";
+      statusPill.className = `draft-state-pill ${item.ai_status || "pending"}`;
+    }
+  }
+
   if (button) {
     const operationKey = key ? `promote:${item.id}:${key}` : null;
     const busyKey = button.dataset.busyKey;
@@ -892,18 +1219,15 @@ function updatePromotionUi(item, index) {
     if (busyForCurrentItem) {
       button.disabled = true;
       button.setAttribute("aria-busy", "true");
-      button.textContent = "转换中…";
+      button.textContent = "加入中…";
     } else {
-      // The button is shared by all records. If another record's request owns
-      // it, release that visual ownership before rendering the current record;
-      // the old request's finally block will then fail its owner check.
       if (busyKey) {
         delete button.dataset.busyKey;
         delete button.dataset.idleLabel;
       }
       button.removeAttribute("aria-busy");
       button.disabled = promoted || !key;
-      button.textContent = promoted ? "已转为正式任务" : "转为正式任务";
+      button.textContent = promoted ? "已加入任务" : "加入任务";
     }
   }
   if (note) {
@@ -915,9 +1239,27 @@ function updatePromotionUi(item, index) {
   }
 }
 
+function renderMissingInfoBar(activeAi) {
+  const bar = document.getElementById("draft-missing-bar");
+  const textEl = document.getElementById("draft-missing-text");
+  if (!bar || !textEl) return;
+  const missing = safeArray(activeAi?.missing_info).map((s) => String(s).trim()).filter(Boolean);
+  if (!missing.length) {
+    bar.classList.add("hidden");
+    textEl.textContent = "";
+    return;
+  }
+  const joined = missing.length === 2 ? `${missing[0]}与 ${missing[1]}` : missing.join("、");
+  textEl.textContent = joined;
+  bar.classList.remove("hidden");
+}
+
 function renderAiSummary(item, ai, items) {
   const box = document.getElementById("ai-summary");
   const chipsBox = document.getElementById("ai-chips");
+  const activeAi = items[state.selectedItemIndex] || ai;
+  renderMissingInfoBar(activeAi);
+
   if (!box) return;
   if (chipsBox) {
     chipsBox.innerHTML = "";
@@ -925,27 +1267,32 @@ function renderAiSummary(item, ai, items) {
   }
   const status = item.ai_status;
   if (status === "failed") {
-    box.textContent = `解析失败：${item.ai_result || "未知错误"}\n可以点“重新解析”重试。`;
+    box.textContent = `解析失败：${item.ai_result || "未知错误"}\n可以点击右上角“↻”重试解析。`;
+    box.classList.remove("hidden");
     return;
   }
   if (status === "unconfigured") {
-    box.textContent = "尚未配置 API Key。打开设置填写后，再重新解析这条记录。";
+    box.textContent = "尚未配置 API Key。打开左下角设置填写后，即可重新解析这条记录。";
+    box.classList.remove("hidden");
     return;
   }
   if (["queued", "pending", "processing"].includes(status)) {
     box.textContent = status === "processing" ? "AI 正在整理这条记录，请稍候。" : "这条记录已排队，等待 AI 整理。";
+    box.classList.remove("hidden");
     return;
   }
   if (status === "skipped") {
     box.textContent = "这条记录跳过了自动解析，可以在设置中开启后重新解析。";
+    box.classList.remove("hidden");
     return;
   }
   if (!ai) {
-    box.textContent = status === "partial" ? "结果待核对：解析输出不完整，请编辑草稿后再转为正式任务。" : "暂无可展示的 AI 解析结果。";
+    box.textContent = status === "partial" ? "结果待核对：解析输出不完整，请编辑草稿后再加入任务。" : "暂无可展示的 AI 解析结果。";
+    box.classList.remove("hidden");
     return;
   }
 
-  const activeAi = items[state.selectedItemIndex] || ai;
+  box.classList.add("hidden");
   if (chipsBox && activeAi) {
     const rawChips = [];
     const routedPersona = activeAi.persona || ai.persona;
@@ -957,11 +1304,7 @@ function renderAiSummary(item, ai, items) {
     if (typeof activeAi.confidence === "number" && activeAi.confidence > 0) {
       rawChips.push({ cls: "", html: `置信度 <strong>${Math.round(activeAi.confidence * 100)}%</strong>` });
     }
-    if (activeAi.deadline) rawChips.push({ cls: "", html: `截止 <strong>${esc(formatDateTime(activeAi.deadline))}</strong>` });
     if (activeAi.estimate_minutes) rawChips.push({ cls: "", html: `预估 <strong>${esc(activeAi.estimate_minutes)}m</strong>` });
-    if (safeArray(activeAi.missing_info).length) {
-      rawChips.push({ cls: "warn", html: `待补充：${esc(activeAi.missing_info.join("、"))}` });
-    }
     if (rawChips.length) {
       chipsBox.innerHTML = rawChips
         .map((c, idx) => `<span class="ai-chip ${c.cls}" style="--chip-i:${idx}">${c.html}</span>`)
@@ -969,25 +1312,6 @@ function renderAiSummary(item, ai, items) {
       chipsBox.classList.remove("hidden");
     }
   }
-
-  const lines = [];
-  if (status === "partial") lines.push("结果待核对：这次解析只恢复了部分输出，请检查下面的草稿。");
-  if (items.length > 1 || hasAiItemList(item)) {
-    lines.push(`图片中识别出 ${items.length} 个待办，可在下方切换并逐项转为正式任务。`);
-    if (ai.summary) lines.push(`图片概述：${ai.summary}`);
-    if (safeArray(activeAi?.subtasks).length) lines.push(`当前项子任务：${activeAi.subtasks.join("；")}`);
-    if (safeArray(activeAi?.missing_info).length) lines.push(`当前项待补充：${activeAi.missing_info.join("；")}`);
-  } else {
-    const personaLabel = personaText[ai.persona] ? `　视角：${personaText[ai.persona]}` : "";
-    lines.push(`类型：${ai.kind || "-"}　优先级：${ai.priority || "-"}　把握：${ai.confidence ?? "-"}${personaLabel}`);
-    if (ai.summary) lines.push(`总结：${ai.summary}`);
-    if (ai.deadline) lines.push(`截止：${formatDateTime(ai.deadline)}`);
-    if (ai.estimate_minutes) lines.push(`预估：${ai.estimate_minutes} 分钟`);
-    if (safeArray(ai.tags).length) lines.push(`标签：${ai.tags.join("、")}`);
-    if (safeArray(ai.subtasks).length) lines.push(`子任务：${ai.subtasks.join("；")}`);
-    if (safeArray(ai.missing_info).length) lines.push(`待补充：${ai.missing_info.join("；")}`);
-  }
-  box.textContent = lines.join("\n");
 }
 
 async function renderDetail(id) {
@@ -1010,17 +1334,11 @@ async function renderDetail(id) {
   if (state.lastInspectorId !== id) {
     state.lastInspectorId = id;
     replayAnimation(contentEl, "inspector-entering");
-  } else {
-    replayAnimation(contentEl.querySelector(".ai-card"), "item-switching");
-    replayAnimation(contentEl.querySelector(".draft-card"), "item-switching");
   }
 
   document.getElementById("detail-source").textContent = `${sourceText(item.source)} · ${formatDateTime(item.created_at)}${item.image_path ? " · 图片附件" : ""}`;
-  const status = document.getElementById("ai-status");
-  status.textContent = statusText[item.ai_status] || item.ai_status || "未知状态";
-  status.className = `badge ${item.ai_status || "pending"}`;
   document.getElementById("ai-model").textContent = item.ai_model ? `模型：${item.ai_model}` : "";
-  document.getElementById("raw-text").textContent = item.raw_text || (item.image_path ? "（无文字说明，仅图片）" : "");
+  document.getElementById("raw-text").textContent = item.raw_text || (item.image_path ? "（无文字说明，仅图片附件）" : "");
 
   const imageBlock = document.getElementById("detail-image");
   const image = document.getElementById("detail-img");
@@ -1052,7 +1370,7 @@ async function renderDetail(id) {
     selectorWrap.classList.remove("hidden");
     selector.innerHTML = items.map((entry, index) => {
       const added = isItemPromoted(item, index);
-      return `<option value="${index}" ${index === state.selectedItemIndex ? "selected" : ""}>${added ? "[已添加] " : ""}${esc(entry.title || `待办 ${index + 1}`)}</option>`;
+      return `<option value="${index}" ${index === state.selectedItemIndex ? "selected" : ""}>${added ? "[已加入] " : ""}${esc(entry.title || `待办 ${index + 1}`)}</option>`;
     }).join("");
     const validIndex = Math.min(Math.max(state.selectedItemIndex, 0), Math.max(items.length - 1, 0));
     state.selectedItemIndex = validIndex;
@@ -1060,8 +1378,6 @@ async function renderDetail(id) {
     selector.onchange = () => {
       saveCurrentInboxDraft();
       state.selectedItemIndex = Number(selector.value);
-      replayAnimation(contentEl.querySelector(".ai-card"), "item-switching");
-      replayAnimation(contentEl.querySelector(".draft-card"), "item-switching");
       renderAiSummary(item, ai, items);
       fillDraftFromItem(items[state.selectedItemIndex], item, state.selectedItemIndex);
       updatePromotionUi(item, state.selectedItemIndex);
@@ -1104,7 +1420,7 @@ function closeInspector() {
   const panel = document.getElementById("detail-panel");
   const emptyEl = document.getElementById("detail-empty");
   const contentEl = document.getElementById("detail-content");
-  panel.setAttribute("aria-hidden", "true");
+  panel?.setAttribute("aria-hidden", "true");
   renderInbox();
 
   if (inspectorCloseTimer) {
@@ -1112,21 +1428,8 @@ function closeInspector() {
     inspectorCloseTimer = null;
   }
 
-  if (contentEl && !contentEl.classList.contains("hidden")) {
-    contentEl.classList.remove("inspector-entering");
-    contentEl.classList.add("is-closing");
-    inspectorCloseTimer = setTimeout(() => {
-      inspectorCloseTimer = null;
-      if (state.selectedId !== null) return;
-      contentEl.classList.add("hidden");
-      contentEl.classList.remove("is-closing");
-      emptyEl.classList.remove("hidden");
-      replayAnimation(emptyEl, "empty-entering");
-    }, 180);
-  } else {
-    contentEl?.classList.add("hidden");
-    emptyEl?.classList.remove("hidden");
-  }
+  contentEl?.classList.add("hidden");
+  emptyEl?.classList.remove("hidden");
 }
 
 async function promoteSelected() {
@@ -1135,7 +1438,7 @@ async function promoteSelected() {
   const index = state.selectedItemIndex;
   const itemKey = itemKeyFor(item, index);
   if (isItemPromoted(item, index)) {
-    showToast("该待办已经转为正式任务");
+    showToast("该待办已经加入正式任务");
     return;
   }
   if (!itemKey) {
@@ -1165,12 +1468,12 @@ async function promoteSelected() {
         if (!Array.isArray(local.promoted_keys)) local.promoted_keys = [];
         if (!local.promoted_keys.includes(itemKey)) local.promoted_keys.push(itemKey);
       }
-      showToast("已转为正式任务");
+      showToast("已加入正式任务");
       await refreshAll();
     } catch (error) {
-      showError(`转为正式任务失败：${errorText(error)}`);
+      showError(`加入任务失败：${errorText(error)}`);
     }
-  }, "btn-promote", "转换中…", () => {
+  }, "btn-promote", "加入中…", () => {
     const current = selectedInboxItem();
     if (current) updatePromotionUi(current, state.selectedItemIndex);
   });
@@ -1240,7 +1543,7 @@ function openTaskModal(id) {
   if (!task) return;
   state.editingId = id;
   setTaskModalMode("edit");
-  document.getElementById("e-meta").textContent = `创建于 ${formatDateTime(task.created_at)} · 来源 ${task.source_inbox_id ? `记录区 #${task.source_inbox_id}` : "手动创建"}`;
+  document.getElementById("e-meta").textContent = `创建于 ${formatDateTime(task.created_at)} · 来源 ${task.source_inbox_id ? `收集箱 #${task.source_inbox_id}` : "手动创建"}`;
   document.getElementById("e-title").value = task.title || "";
   document.getElementById("e-kind").value = task.kind || "task";
   document.getElementById("e-status").value = task.status || "todo";
@@ -1265,7 +1568,7 @@ function closeTaskModal() {
 function openTaskModalForCreate() {
   state.editingId = null;
   setTaskModalMode("create");
-  document.getElementById("e-meta").textContent = "直接创建正式任务，不经过记录区";
+  document.getElementById("e-meta").textContent = "直接创建正式任务，不经过收集箱";
   document.getElementById("e-title").value = "";
   document.getElementById("e-kind").value = "task";
   document.getElementById("e-status").value = "todo";
@@ -1288,7 +1591,7 @@ function renderEditSubtasks() {
   if (!box) return;
   const subtasks = safeArray(task?.subtasks);
   if (!task || !subtasks.length) {
-    box.innerHTML = '<div class="subtask-empty">暂无子任务</div>';
+    box.innerHTML = '<div class="subtask-empty">暂无执行步骤</div>';
     return;
   }
   box.innerHTML = subtasks.map((subtask, idx) => `
@@ -1306,7 +1609,7 @@ function renderEditSubtasks() {
           await refreshAll();
         } catch (error) {
           checkbox.checked = !desired;
-          showError(`更新子任务失败：${errorText(error)}`);
+          showError(`更新步骤失败：${errorText(error)}`);
         }
       });
     });
@@ -1325,7 +1628,7 @@ function renderEditSubtasks() {
           await refreshAll();
         } catch (error) {
           row?.classList.remove("is-removing");
-          showError(`删除子任务失败：${errorText(error)}`);
+          showError(`删除步骤失败：${errorText(error)}`);
         }
       });
     });
@@ -1342,7 +1645,7 @@ async function addSubtaskFromInput() {
       input.value = "";
       await refreshAll();
     } catch (error) {
-      showError(`添加子任务失败：${errorText(error)}`);
+      showError(`添加步骤失败：${errorText(error)}`);
     }
   }, "e-subtask-add", "添加中…");
 }
@@ -1426,7 +1729,6 @@ async function loadSettings() {
   currentSettings = await invoke("get_settings");
   const settings = currentSettings || {};
   document.getElementById("s-provider").value = settings.provider || "openai";
-  // The backend deliberately never returns api_key. Always clear the secret field.
   document.getElementById("s-api-key").value = "";
   document.getElementById("s-remove-key").checked = false;
   document.getElementById("s-key-state").textContent = settings.has_api_key ? "已保存 API Key" : "未保存 API Key";
@@ -1497,6 +1799,14 @@ async function saveSettings() {
 async function refreshInbox() {
   const result = await invoke("list_inbox");
   state.inbox = Array.isArray(result) ? result : [];
+  if (!state.didAutoSelectInitial && state.selectedId == null && state.inbox.length > 0) {
+    state.didAutoSelectInitial = true;
+    state.selectedId = state.inbox[0].id;
+    state.selectedItemIndex = 0;
+    renderInbox();
+    await renderDetail(state.selectedId);
+    return;
+  }
   renderInbox();
 }
 
@@ -1548,7 +1858,7 @@ async function refreshAll() {
     if (state.editingId) renderEditSubtasks();
   })();
   try {
-    await state.refreshPromise;
+    return await state.refreshPromise;
   } finally {
     state.refreshPromise = null;
   }
@@ -1559,7 +1869,6 @@ async function subscribe(eventName, handler) {
   try {
     await listen(eventName, handler);
   } catch (error) {
-    // A missing optional event listener must not stop the main window loading.
     console.warn(`无法监听 ${eventName}`, error);
   }
 }
@@ -1606,13 +1915,57 @@ function attachModalEvents() {
 
 async function init() {
   initTheme();
+
+  // 顶部栏侧边栏折叠切换
+  document.getElementById("btn-sidebar-toggle")?.addEventListener("click", () => {
+    document.getElementById("app-shell")?.classList.toggle("sidebar-collapsed");
+  });
+
+  // 顶部栏全局搜索
+  const globalSearch = document.getElementById("inbox-search");
+  globalSearch?.addEventListener("input", (event) => {
+    const val = event.target.value;
+    if (state.view === "inbox") {
+      state.inboxSearch = val;
+      renderInbox();
+    } else {
+      state.taskFilter = val;
+      const taskFilterEl = document.getElementById("task-filter");
+      if (taskFilterEl) taskFilterEl.value = val;
+      renderTasks();
+    }
+  });
+
+  document.getElementById("btn-pane-search")?.addEventListener("click", () => {
+    globalSearch?.focus();
+    globalSearch?.select();
+  });
+
+  // 顶部栏 ••• 更多菜单
+  const moreBtn = document.getElementById("btn-more-menu");
+  const morePopover = document.getElementById("titlebar-more-popover");
+  moreBtn?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const isHidden = morePopover?.classList.toggle("hidden");
+    moreBtn.setAttribute("aria-expanded", String(!isHidden));
+  });
+  document.addEventListener("click", (event) => {
+    if (morePopover && !morePopover.classList.contains("hidden") && !event.target.closest(".titlebar-more-wrap")) {
+      morePopover.classList.add("hidden");
+      moreBtn?.setAttribute("aria-expanded", "false");
+    }
+  });
+
   document.getElementById("btn-theme-toggle")?.addEventListener("click", () => {
     const current = document.documentElement.getAttribute("data-theme") || "light";
     applyTheme(current === "dark" ? "light" : "dark");
+    morePopover?.classList.add("hidden");
   });
+
   document.querySelectorAll(".nav-item[data-view]").forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view));
   });
+
   document.querySelectorAll("[data-inbox-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       const nextFilter = button.dataset.inboxFilter || "all";
@@ -1624,6 +1977,7 @@ async function init() {
       renderInbox();
     });
   });
+
   document.querySelectorAll("[data-task-quick]").forEach((button) => {
     button.addEventListener("click", () => {
       const nextQuick = button.dataset.taskQuick || "all";
@@ -1635,8 +1989,14 @@ async function init() {
       renderTasks();
     });
   });
-  document.getElementById("btn-refresh").addEventListener("click", () => refreshAll().catch((error) => showError(`刷新失败：${errorText(error)}`)));
+
+  document.getElementById("btn-refresh").addEventListener("click", () => {
+    morePopover?.classList.add("hidden");
+    refreshAll().catch((error) => showError(`刷新失败：${errorText(error)}`));
+  });
+
   document.getElementById("btn-process-pending").addEventListener("click", async () => {
+    morePopover?.classList.add("hidden");
     await runBusy("process-pending", async () => {
       try {
         const count = await invoke("process_pending_inbox");
@@ -1647,20 +2007,151 @@ async function init() {
       }
     }, "btn-process-pending", "启动中…");
   });
+
   document.getElementById("btn-settings").addEventListener("click", openSettings);
   document.getElementById("btn-close-inspector").addEventListener("click", closeInspector);
   document.getElementById("tab-active").addEventListener("click", () => setTaskView("active"));
   document.getElementById("tab-completed")?.addEventListener("click", () => setTaskView("completed"));
   document.getElementById("tab-archived").addEventListener("click", () => setTaskView("archived"));
   document.getElementById("btn-new-task").addEventListener("click", openTaskModalForCreate);
+
   document.getElementById("task-filter").addEventListener("input", (event) => {
     state.taskFilter = event.target.value;
+    if (globalSearch && state.view === "tasks") globalSearch.value = event.target.value;
     renderTasks();
   });
+
+  // 草稿 Hero 卡截止日期与优先级浮层交互
+  const dueTrigger = document.getElementById("due-picker-trigger");
+  const duePopover = document.getElementById("due-popover");
+  const dueInput = document.getElementById("f-due");
+  const dueDateInput = document.getElementById("f-due-date");
+  const dueTimeInput = document.getElementById("f-due-time");
+  const prioTrigger = document.getElementById("priority-picker-trigger");
+  const prioPopover = document.getElementById("priority-popover");
+  const prioSelect = document.getElementById("f-priority");
+
+  function closeMetaPopovers() {
+    duePopover?.classList.add("hidden");
+    dueTrigger?.setAttribute("aria-expanded", "false");
+    prioPopover?.classList.add("hidden");
+    prioTrigger?.setAttribute("aria-expanded", "false");
+  }
+
+  dueTrigger?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const willOpen = duePopover?.classList.contains("hidden");
+    closeMetaPopovers();
+    if (willOpen && duePopover) {
+      syncFriendlyDeadlineUi();
+      duePopover.classList.remove("hidden");
+      dueTrigger.setAttribute("aria-expanded", "true");
+    }
+  });
+
+  duePopover?.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+
+  document.querySelectorAll("[data-due-preset]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      if (!dueInput) return;
+      dueInput.value = computePresetDueLocal(chip.dataset.duePreset);
+      syncFriendlyDeadlineUi();
+      markInboxDraftDirty();
+      closeMetaPopovers();
+    });
+  });
+
+  function applyCustomDateAndTime() {
+    if (!dueInput || !dueDateInput) return;
+    const dVal = dueDateInput.value;
+    const tVal = (dueTimeInput?.value || "18:00").slice(0, 5);
+    if (!dVal) {
+      dueInput.value = "";
+    } else {
+      dueInput.value = `${dVal}T${tVal}`;
+    }
+    syncFriendlyDeadlineUi();
+    markInboxDraftDirty();
+  }
+
+  dueDateInput?.addEventListener("input", applyCustomDateAndTime);
+  dueDateInput?.addEventListener("change", applyCustomDateAndTime);
+  dueTimeInput?.addEventListener("input", () => {
+    if (dueDateInput && !dueDateInput.value) {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, "0");
+      const dd = String(now.getDate()).padStart(2, "0");
+      dueDateInput.value = `${yyyy}-${mm}-${dd}`;
+    }
+    applyCustomDateAndTime();
+  });
+
+  document.getElementById("btn-due-clear")?.addEventListener("click", () => {
+    if (dueInput) dueInput.value = "";
+    if (dueDateInput) dueDateInput.value = "";
+    syncFriendlyDeadlineUi();
+    markInboxDraftDirty();
+    closeMetaPopovers();
+  });
+
+  document.getElementById("btn-due-done")?.addEventListener("click", () => {
+    if (dueDateInput?.value) applyCustomDateAndTime();
+    closeMetaPopovers();
+  });
+
+  prioTrigger?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const willOpen = prioPopover?.classList.contains("hidden");
+    closeMetaPopovers();
+    if (willOpen && prioPopover) {
+      prioPopover.classList.remove("hidden");
+      prioTrigger.setAttribute("aria-expanded", "true");
+    }
+  });
+
+  document.querySelectorAll("#priority-popover .priority-option").forEach((optionBtn) => {
+    optionBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (prioSelect && optionBtn.dataset.prio) {
+        prioSelect.value = optionBtn.dataset.prio;
+        syncFriendlyPriorityUi();
+        markInboxDraftDirty();
+      }
+      closeMetaPopovers();
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest("#due-popover-wrap") && !event.target.closest("#priority-popover-wrap")) {
+      closeMetaPopovers();
+    }
+  });
+
+  dueInput?.addEventListener("input", syncFriendlyDeadlineUi);
+  dueInput?.addEventListener("change", syncFriendlyDeadlineUi);
+  prioSelect?.addEventListener("change", syncFriendlyPriorityUi);
+  document.getElementById("f-description")?.addEventListener("input", autoResizeHeroDesc);
+  document.getElementById("f-subtasks")?.addEventListener("input", renderDraftStepsList);
+
+  document.getElementById("btn-add-draft-step")?.addEventListener("click", () => {
+    addDraftStep("补充执行步骤");
+  });
+
+  // 原始记录「更多属性」折叠抽屉
+  const morePropsBtn = document.getElementById("btn-toggle-more-props");
+  const morePropsDrawer = document.getElementById("more-props-drawer");
+  morePropsBtn?.addEventListener("click", () => {
+    const hidden = morePropsDrawer?.classList.toggle("hidden");
+    morePropsBtn.setAttribute("aria-expanded", String(!hidden));
+  });
+
   document.getElementById("btn-promote").addEventListener("click", promoteSelected);
   document.getElementById("btn-delete-inbox").addEventListener("click", async () => {
     const item = selectedInboxItem();
-    if (!item || !window.confirm("只会在记录区中忽略这条记录，不会删除正式任务中的关联记录。继续？")) return;
+    if (!item || !window.confirm("只会在收集箱中忽略这条记录，不会删除正式任务中的关联记录。继续？")) return;
     const activeRow = document.querySelector(`.inbox-row[data-id="${item.id}"]`);
     await runBusy(`delete-inbox:${item.id}`, async () => {
       try {
@@ -1678,6 +2169,7 @@ async function init() {
       }
     }, "btn-delete-inbox", "处理中…");
   });
+
   document.getElementById("btn-reparse").addEventListener("click", async () => {
     const item = selectedInboxItem();
     if (!item) return;
@@ -1690,8 +2182,9 @@ async function init() {
       } catch (error) {
         showError(`重新解析失败：${errorText(error)}`);
       }
-    }, "btn-reparse", "排队中…");
+    }, "btn-reparse", "…");
   });
+
   document.getElementById("btn-close-settings").addEventListener("click", () => closeModal("settings-modal"));
   document.getElementById("btn-save-settings").addEventListener("click", saveSettings);
   document.getElementById("s-preset").addEventListener("change", (event) => {
@@ -1701,6 +2194,7 @@ async function init() {
     document.getElementById("s-base-url").value = preset.base_url;
     document.getElementById("s-model").value = preset.model;
   });
+
   document.getElementById("btn-close-task").addEventListener("click", closeTaskModal);
   document.getElementById("btn-save-task").addEventListener("click", saveTaskModal);
   document.getElementById("e-subtask-add").addEventListener("click", addSubtaskFromInput);
@@ -1711,13 +2205,15 @@ async function init() {
       addSubtaskFromInput();
     }
   });
+
   ["f-title", "f-kind", "f-priority", "f-status", "f-due", "f-estimate", "f-start", "f-end", "f-description", "f-tags", "f-subtasks"].forEach((id) => {
-    document.getElementById(id).addEventListener("input", markInboxDraftDirty);
-    document.getElementById(id).addEventListener("change", markInboxDraftDirty);
+    document.getElementById(id)?.addEventListener("input", markInboxDraftDirty);
+    document.getElementById(id)?.addEventListener("change", markInboxDraftDirty);
   });
+
   attachModalEvents();
   document.addEventListener("keydown", handleKeydown);
-  await subscribe("inbox-updated", () => refreshAll().catch((error) => showError(`记录区刷新失败：${errorText(error)}`)));
+  await subscribe("inbox-updated", () => refreshAll().catch((error) => showError(`收集箱刷新失败：${errorText(error)}`)));
   await subscribe("tasks-updated", () => refreshAll().catch((error) => showError(`任务刷新失败：${errorText(error)}`)));
   await subscribe("operation-error", (event) => {
     const payload = event?.payload || {};

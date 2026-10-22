@@ -8,21 +8,25 @@ const fixture = String.raw`
 (() => {
   const listeners = new Map();
   const fire = (name) => (listeners.get(name) || []).forEach(fn => fn({payload:null}));
-  const stamp = '2026-09-16T02:00:00.000Z';
+  const now = new Date();
+  const today10 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 0, 0).toISOString();
+  const yesterday1920 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 19, 20, 0).toISOString();
+  const tomorrow18 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 18, 0, 0).toISOString();
+  const stamp = today10;
   let next = 20;
   const task = (id, title, status, priority, tags, description, extra={}) => ({id,title,status,priority,tags,description,kind:'task',due_at:null,planned_start:null,planned_end:null,estimate_minutes:60,actual_minutes:0,progress:0,source_inbox_id:null,source_snapshot:null,is_archived:false,deleted_at:null,created_at:stamp,updated_at:stamp,subtasks:[],...extra});
   const tasks = [
-    task(1,'整理本周产品评审反馈','in_progress','P1',['产品设计','本周重点'],'汇总交互走查中的关键问题，确认下一轮迭代的优先级。',{progress:45,due_at:'2026-09-18T10:00:00Z',planned_start:'2026-09-16T01:00:00Z',planned_end:'2026-09-16T02:00:00Z',subtasks:[{id:1,task_id:1,text:'归纳记录区反馈',is_done:true,position:0},{id:2,task_id:1,text:'准备评审清单',is_done:false,position:1}]}),
-    task(2,'完成任务工作台的交互细节','todo','P1',['TaskVault','开发'],'检查任务筛选、详情编辑和键盘操作，让记录与整理更顺手。',{due_at:'2026-09-19T10:00:00Z'}),
+    task(1,'整理本周产品评审反馈','in_progress','P1',['产品设计','本周重点'],'汇总交互走查中的关键问题，确认下一轮迭代的优先级。',{progress:45,due_at:tomorrow18,planned_start:today10,planned_end:today10,subtasks:[{id:1,task_id:1,text:'归纳记录区反馈',is_done:true,position:0},{id:2,task_id:1,text:'准备评审清单',is_done:false,position:1}]}),
+    task(2,'完成任务工作台的交互细节','todo','P1',['TaskVault','开发'],'检查任务筛选、详情编辑和键盘操作，让记录与整理更顺手。',{due_at:tomorrow18}),
     task(3,'准备周五的项目同步材料','todo','P2',['协作'],'整理本周进展、待确认问题和下周计划。'),
     task(4,'核对图片识别出的待办','blocked','P2',['记录区'],'等待补充会议截图中的截止日期。'),
     task(5,'更新本地开发环境说明','done','P3',['文档'],'补充启动方式与数据保存路径。',{progress:100,actual_minutes:35}),
     task(6,'归档上月的工作记录','done','P3',['归档'],'已完成的历史记录。',{is_archived:true,progress:100})
   ];
   const inbox = [
-    {id:3,raw_text:'登录接口偶发 502 报错，周五前需要排查网关日志并完成修复验证。',source:'hotkey',created_at:stamp,ai_status:'done',ai_result:JSON.stringify({persona:'dev',title:'排查并修复登录接口偶发 502 报错',kind:'task',description:'定位网关与上游服务 502 错误日志，完成连接池/超时修复与联调验证。',priority:'P1',deadline:'2026-10-23T18:00:00+08:00',estimate_minutes:120,tags:['后端','网关','排障'],subtasks:['提取网关与认证服务 502 时间段日志','核查连接池超时与健康检查配置','回归自测并验证监控指标恢复'],confidence:0.94,missing_info:['报错发生的具体环境与 TraceID'],summary:'周五前需定位并修复登录接口偶发 502 问题',items:[]}),ai_model:'deepseek-v4-flash',is_promoted:false,deleted_at:null,image_path:null,item_keys:['text'],promoted_keys:[],ai_generation:1},
-    {id:2,raw_text:'下次复盘时讨论一下：记录区能不能支持按研发/产品专家视角深度拆解子任务？',source:'hotkey',created_at:stamp,ai_status:'pending',ai_result:null,ai_model:null,is_promoted:false,deleted_at:null,image_path:null,item_keys:['text'],promoted_keys:[],ai_generation:0},
-    {id:1,raw_text:'截图里的两项待办需要分别确认。',source:'image',created_at:stamp,ai_status:'done',ai_result:JSON.stringify({summary:'两项待办需要跟进',items:[{persona:'pm',title:'整理会议结论',description:'汇总会议记录并确认负责人',priority:'P1',kind:'task',tags:['会议'],subtasks:['输出会议纪要文档','与各模块负责人确认排期节点']},{persona:'pm',title:'更新验收清单',description:'补充本轮迭代的验收项目',priority:'P2',kind:'task',tags:['项目'],subtasks:['梳理核心验收用例','同步测试与产品团队']}]}),ai_model:'glm-4v-flash',is_promoted:true,deleted_at:null,image_path:'fixture.png',item_keys:['image:one','image:two'],promoted_keys:['image:one'],ai_generation:1}
+    {id:3,raw_text:'登录接口偶发 502 报错，周五前需要排查网关日志并完成修复与验证。',source:'hotkey',created_at:today10,ai_status:'done',ai_result:JSON.stringify({persona:'dev',title:'排查登录接口异常',kind:'task',description:'定位网关异常，完成修复与回归验证。',priority:'P1',deadline:tomorrow18,estimate_minutes:120,tags:['后端','网关','排障'],subtasks:['提取网关与认证服务日志','核查连接池与超时配置','完成回归并检查监控指标'],confidence:0.94,missing_info:['报错环境与 TraceID'],summary:'定位网关异常，完成修复与回归验证。',items:[]}),ai_model:'deepseek-v4-flash',is_promoted:false,deleted_at:null,image_path:null,item_keys:['text'],promoted_keys:[],ai_generation:1},
+    {id:2,raw_text:'下次复盘时讨论一下：记录区能否支持按研发/产品专家视角深度拆解子任务？',source:'hotkey',created_at:today10,ai_status:'pending',ai_result:null,ai_model:null,is_promoted:false,deleted_at:null,image_path:null,item_keys:['text'],promoted_keys:[],ai_generation:0},
+    {id:1,raw_text:'截图里的两项待办需要分别确认',source:'image',created_at:yesterday1920,ai_status:'done',ai_result:JSON.stringify({summary:'两项待办需要跟进',items:[{persona:'pm',title:'整理会议结论',description:'汇总会议记录并确认负责人',priority:'P1',kind:'task',tags:['会议'],subtasks:['输出会议纪要文档','与各模块负责人确认排期节点']},{persona:'pm',title:'更新验收清单',description:'补充本轮迭代的验收项目',priority:'P2',kind:'task',tags:['项目'],subtasks:['梳理核心验收用例','同步测试与产品团队']}]}),ai_model:'glm-4v-flash',is_promoted:true,deleted_at:null,image_path:'fixture.png',item_keys:['image:one','image:two'],promoted_keys:['image:one'],ai_generation:1}
   ];
   let settings={provider:'openai',base_url:'https://api.deepseek.com',model:'deepseek-v4-flash',vision_model:null,default_persona:'auto',disable_reasoning:true,auto_parse:false,autostart:false,quick_hotkey:'Ctrl+Alt+Q',main_hotkey:'Ctrl+Alt+W',has_api_key:true};
   const clone = value => structuredClone(value);

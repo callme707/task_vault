@@ -54,14 +54,14 @@ function syncQuickTheme() {
 function setStatus(message, isError = false) {
   const status = document.getElementById("status");
   status.textContent = message;
-  status.style.color = isError ? "#f43f5e" : "";
+  status.style.color = isError ? "#ef4444" : "";
 }
 
 function setSaveBusy(busy) {
   const button = document.getElementById("btn-save");
   button.disabled = busy;
   button.setAttribute("aria-busy", String(busy));
-  button.textContent = busy ? "保存中…" : "✨ 保存记录";
+  button.textContent = busy ? "保存中…" : "保存记录";
 }
 
 function setImage(dataUrl) {
@@ -141,7 +141,7 @@ async function save() {
   }
   saving = true;
   setSaveBusy(true);
-  setStatus("正在保存到记录区…");
+  setStatus("正在保存到收集箱…");
   const personaSelect = document.getElementById("quick-persona");
   const persona = personaSelect?.value ? personaSelect.value : null;
   try {
@@ -181,7 +181,7 @@ async function hideQuickWindow() {
     stage.classList.remove("active");
     stage.classList.add("closing");
     await new Promise((resolve) => {
-      hideWindowTimer = setTimeout(resolve, 200);
+      hideWindowTimer = setTimeout(resolve, 180);
     });
     hideWindowTimer = null;
   }

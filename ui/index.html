@@ -7,24 +7,72 @@
   <link rel="stylesheet" href="main.css" />
 </head>
 <body>
+  <!-- 天空冰晶折射光影背景层 -->
   <div class="aurora-bg" aria-hidden="true">
+    <div class="light-beam beam-1"></div>
+    <div class="light-beam beam-2"></div>
+    <div class="light-beam beam-3"></div>
     <div class="aurora-blob blob-1"></div>
     <div class="aurora-blob blob-2"></div>
     <div class="aurora-blob blob-3"></div>
   </div>
 
+  <!-- 顶部一体化无边框窗口栏 -->
   <header id="titlebar" class="titlebar" aria-label="窗口栏">
     <div id="titlebar-drag" class="titlebar-drag">
-      <span class="titlebar-badge">
-        <span class="titlebar-dot" aria-hidden="true"></span>
+      <div class="titlebar-brand">
+        <span class="brand-spark-logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M12 2.5C12.7 7.1 16.9 11.3 21.5 12C16.9 12.7 12.7 16.9 12 21.5C11.3 16.9 7.1 12.7 2.5 12C7.1 11.3 11.3 7.1 12 2.5Z" />
+          </svg>
+        </span>
         <span class="titlebar-name">TaskVault</span>
-      </span>
-      <span class="titlebar-pill">AI 灵感与任务空间</span>
-    </div>
-    <div class="titlebar-right">
-      <button id="btn-theme-toggle" class="theme-toggle" type="button" title="切换活力日光 / 极光暗夜主题" aria-label="切换主题">
-        <span id="theme-toggle-label">☀️ 活力日光</span>
+      </div>
+      <button id="btn-sidebar-toggle" class="titlebar-icon-btn" type="button" title="收起 / 展开侧边栏" aria-label="切换侧边栏">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="4" y1="7" x2="20" y2="7" />
+          <line x1="4" y1="12" x2="20" y2="12" />
+          <line x1="4" y1="17" x2="20" y2="17" />
+        </svg>
       </button>
+    </div>
+
+    <div class="titlebar-right">
+      <label class="titlebar-search" aria-label="全局搜索">
+        <svg class="titlebar-search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7" />
+          <line x1="20" y1="20" x2="16.2" y2="16.2" />
+        </svg>
+        <input id="inbox-search" type="search" placeholder="搜索收集箱..." autocomplete="off" />
+      </label>
+
+      <div class="titlebar-more-wrap">
+        <button id="btn-more-menu" class="titlebar-icon-btn" type="button" title="更多操作与外观" aria-label="更多操作" aria-expanded="false">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
+            <circle cx="5.5" cy="12" r="1.75" />
+            <circle cx="12" cy="12" r="1.75" />
+            <circle cx="18.5" cy="12" r="1.75" />
+          </svg>
+        </button>
+
+        <div id="titlebar-more-popover" class="titlebar-popover hidden" role="menu" aria-label="工作台操作菜单">
+          <button id="btn-process-pending" class="popover-item" type="button" role="menuitem">
+            <span class="popover-icon">✨</span>
+            <span>整理待处理记录</span>
+          </button>
+          <button id="btn-refresh" class="popover-item" type="button" role="menuitem">
+            <span class="popover-icon">↻</span>
+            <span>刷新全部数据</span>
+          </button>
+          <button id="btn-theme-toggle" class="popover-item" type="button" role="menuitem">
+            <span class="popover-icon">🎨</span>
+            <span id="theme-toggle-label">☀️ 活力日光</span>
+          </button>
+        </div>
+      </div>
+
+      <span class="titlebar-divider" aria-hidden="true"></span>
+
       <div class="window-controls">
         <button id="win-minimize" class="window-control" type="button" aria-label="最小化" title="最小化"><span class="icon icon-minus" aria-hidden="true"></span></button>
         <button id="win-maximize" class="window-control" type="button" aria-label="最大化" title="最大化"><span class="icon icon-square" aria-hidden="true"></span></button>
@@ -33,260 +81,374 @@
     </div>
   </header>
 
-  <div class="app-shell">
+  <div id="app-shell" class="app-shell">
+    <!-- 左侧毛玻璃导航栏 -->
     <aside class="sidebar" aria-label="主导航">
-      <div class="sidebar-brand">
-        <div class="brand-monogram" aria-hidden="true">
-          <span>TV</span>
-        </div>
-        <div class="brand-text">
-          <div class="brand-name">TaskVault</div>
-          <div class="brand-caption">捕捉灵感 · 智能推进</div>
-        </div>
-      </div>
-
-      <div class="sidebar-section-label">WORKSPACE</div>
+      <div class="sidebar-section-label">工作区</div>
       <nav class="nav-list" aria-label="视图切换">
-        <button class="nav-item active" data-view="inbox" type="button">
-          <span class="nav-icon-wrap nav-icon-inbox"><span class="icon icon-inbox" aria-hidden="true"></span></span>
-          <span class="nav-label">灵感收集箱</span>
+        <button class="nav-item active" data-view="inbox" type="button" aria-current="page">
+          <span class="nav-icon-wrap nav-icon-inbox" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+              <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+            </svg>
+          </span>
+          <span class="nav-label">收集箱</span>
           <span id="nav-inbox-count" class="nav-count">0</span>
         </button>
+
         <button class="nav-item" data-view="tasks" type="button">
-          <span class="nav-icon-wrap nav-icon-tasks"><span class="icon icon-list-todo" aria-hidden="true"></span></span>
-          <span class="nav-label">正式任务看板</span>
+          <span class="nav-icon-wrap nav-icon-tasks" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="5" width="4" height="4" rx="1" />
+              <path d="M10 7h11" />
+              <rect x="3" y="15" width="4" height="4" rx="1" />
+              <path d="M10 17h11" />
+              <path d="M10 12h11" />
+              <circle cx="5" cy="12" r="1" fill="currentColor" />
+            </svg>
+          </span>
+          <span class="nav-label">任务</span>
           <span id="nav-task-count" class="nav-count">0</span>
         </button>
       </nav>
 
-      <div class="sidebar-pulse" aria-label="工作区概览">
-        <div class="pulse-header">
-          <span class="pulse-title">今日能量脉搏</span>
-          <span id="pulse-rate" class="pulse-rate">就绪</span>
-        </div>
-        <div class="pulse-grid">
-          <div class="pulse-stat stat-violet">
-            <span id="pulse-unpromoted" class="pulse-val">0</span>
-            <span class="pulse-lbl">待转正</span>
-          </div>
-          <div class="pulse-stat stat-sky">
-            <span id="pulse-active" class="pulse-val">0</span>
-            <span class="pulse-lbl">进行中</span>
-          </div>
-          <div class="pulse-stat stat-mint">
-            <span id="pulse-done" class="pulse-val">0</span>
-            <span class="pulse-lbl">已完成</span>
-          </div>
-        </div>
+      <!-- 保留统计节点以兼容脚本状态同步 -->
+      <div class="sidebar-pulse hidden" aria-hidden="true">
+        <span id="pulse-rate">就绪</span>
+        <span id="pulse-unpromoted">0</span>
+        <span id="pulse-active">0</span>
+        <span id="pulse-done">0</span>
       </div>
 
       <div class="sidebar-spacer"></div>
 
       <div class="sidebar-shortcuts" aria-label="全局快捷键">
         <div class="shortcut-row">
-          <span>⚡ 闪念 / 截图</span>
+          <span class="shortcut-label">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            <span>闪念 / 截图</span>
+          </span>
           <span class="kbd-group"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>Q</kbd></span>
         </div>
         <div class="shortcut-row">
-          <span>🚀 呼出工作台</span>
+          <span class="shortcut-label">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="3" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+            </svg>
+            <span>呼出工作台</span>
+          </span>
           <span class="kbd-group"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>W</kbd></span>
         </div>
       </div>
 
+      <div class="sidebar-security" title="数据库、图片附件与密钥均由当前 Windows 账户 DPAPI 加密保护">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>DPAPI 本地加密守护中</span>
+      </div>
+
       <div class="sidebar-footer">
-        <div class="sidebar-footnote" title="数据库、图片附件与密钥均由当前 Windows 账户 DPAPI 加密保护">
-          <span class="status-dot" aria-hidden="true"></span>
-          <span>DPAPI 本地加密守护中</span>
-        </div>
         <button id="btn-settings" class="nav-item nav-settings" type="button">
-          <span class="nav-icon-wrap nav-icon-settings"><span class="icon icon-settings-2" aria-hidden="true"></span></span>
-          <span class="nav-label">AI 与偏好设置</span>
+          <span class="nav-icon-wrap nav-icon-settings" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </span>
+          <span class="nav-label">设置</span>
         </button>
       </div>
     </aside>
 
+    <!-- 主内容区 -->
     <main class="app-main">
-      <header class="topbar">
-        <div class="page-heading">
-          <div class="heading-title-row">
-            <span class="eyebrow"><span id="page-kicker">INBOX STUDIO</span></span>
-            <h1 id="page-title">记录区</h1>
-          </div>
-          <p id="page-subtitle">随手收集一句话或截图，AI 自动提炼结构化草稿，由你确认入库。</p>
-        </div>
-        <div class="topbar-actions">
-          <button id="btn-process-pending" class="btn primary pill-btn" type="button">✨ 整理待处理</button>
-          <button id="btn-refresh" class="btn ghost pill-btn" type="button">刷新</button>
-        </div>
+      <!-- 隐藏式页面标题语义锚点 -->
+      <header class="topbar hidden" aria-hidden="true">
+        <span id="page-kicker">INBOX STUDIO</span>
+        <h1 id="page-title">收集箱</h1>
+        <p id="page-subtitle">随手收集一句话或截图，AI 自动提炼结构化草稿，由你确认入库。</p>
       </header>
 
-      <section id="view-inbox" class="view active" aria-labelledby="page-title">
-        <div class="view-toolbar">
-          <div class="toolbar-left">
-            <p class="toolbar-summary">
-              <strong id="inbox-count">0 条记录</strong>
-              <span class="toolbar-separator">·</span>
-              <span>原始记录永久保留</span>
-            </p>
-            <div id="inbox-filter-group" class="filter-pills" role="group" aria-label="记录筛选">
-              <button class="filter-pill active" data-inbox-filter="all" type="button">全部</button>
-              <button class="filter-pill" data-inbox-filter="unpromoted" type="button">待转正</button>
-              <button class="filter-pill" data-inbox-filter="image" type="button">🖼️ 截图</button>
-              <button class="filter-pill" data-inbox-filter="attention" type="button">⚡ 待处理</button>
-            </div>
-          </div>
-          <div class="toolbar-hint">
-            <span>快捷键</span>
-            <kbd>Ctrl</kbd><span>+</span><kbd>Alt</kbd><span>+</span><kbd>Q</kbd>
-            <span>极速录入</span>
-          </div>
-        </div>
-
+      <!-- 视图 1：收集箱（中栏收集流 + 右栏四卡式 AI 草稿工作台） -->
+      <section id="view-inbox" class="view active" aria-label="收集箱工作台">
         <div class="inbox-workspace">
-          <section class="surface inbox-list-pane" aria-label="记录区列表">
-            <div class="surface-head compact-head">
-              <div>
-                <div class="surface-title">灵感与收集流</div>
-                <div class="surface-subtitle">最新收集在最前 · 点击卡片展开 AI 草稿</div>
+          <!-- 中栏：收集箱列表 -->
+          <section class="surface inbox-list-pane" aria-label="收集箱列表">
+            <div class="inbox-pane-header">
+              <div class="inbox-pane-title-group">
+                <h2 class="inbox-pane-title">收集箱</h2>
+                <span id="inbox-count" class="inbox-pane-count">0</span>
               </div>
-              <span class="pane-badge"><span class="icon icon-inbox" aria-hidden="true"></span></span>
+              <button id="btn-pane-search" class="pane-icon-btn" type="button" title="搜索收集箱记录" aria-label="搜索收集箱">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="7" />
+                  <line x1="20" y1="20" x2="16.2" y2="16.2" />
+                </svg>
+              </button>
             </div>
+
+            <div id="inbox-filter-group" class="inbox-filter-pills" role="group" aria-label="记录筛选">
+              <button class="filter-pill active" data-inbox-filter="all" type="button">全部</button>
+              <button class="filter-pill" data-inbox-filter="unpromoted" type="button">待处理</button>
+            </div>
+
             <div id="inbox-list" class="list inbox-list"></div>
           </section>
 
-          <section id="detail-panel" class="surface inspector-pane" aria-label="记录检查器">
-            <div class="inspector-head">
-              <div>
-                <div class="surface-title">AI 审阅与转正工作台</div>
-                <div class="surface-subtitle">核对 AI 提炼建议，一键转化为正式任务</div>
-              </div>
-              <button id="btn-close-inspector" class="icon-btn" type="button" aria-label="关闭记录检查器" title="关闭检查器">收起</button>
+          <!-- 右栏：AI 草稿审阅与执行步骤工作台 -->
+          <section id="detail-panel" class="inspector-pane" aria-label="AI 草稿审阅台">
+            <div class="inspector-head hidden" aria-hidden="true">
+              <button id="btn-close-inspector" class="icon-btn" type="button">收起</button>
             </div>
 
-            <div id="detail-empty" class="inspector-empty">
+            <!-- 未选中时的空状态 -->
+            <div id="detail-empty" class="surface inspector-empty">
               <div class="empty-halo">
-                <div class="empty-mark" aria-hidden="true"><span class="icon icon-inbox"></span></div>
+                <div class="empty-mark" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                    <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+                  </svg>
+                </div>
               </div>
-              <div class="empty-heading">点选左侧卡片，开启 AI 提炼预览</div>
-              <p>无论是会议群聊截图还是随手记下的灵感，AI 都会为你拆解出标题、优先级、截止时间与子任务清单。</p>
+              <div class="empty-heading">选择左侧记录，审阅 AI 结构化草稿</div>
+              <p>无论是随手记下的一句话还是群聊截图，AI 都会为你自动拆解出清晰标题、截止时间、优先级与执行步骤。</p>
               <div class="empty-flow" aria-label="整理流程">
                 <span class="flow-step"><em>1</em> 随手收集</span>
                 <span class="flow-arrow" aria-hidden="true">→</span>
-                <span class="flow-step"><em>2</em> AI 提炼</span>
+                <span class="flow-step"><em>2</em> AI 草稿</span>
                 <span class="flow-arrow" aria-hidden="true">→</span>
-                <span class="flow-step"><em>3</em> 确认推进</span>
+                <span class="flow-step"><em>3</em> 加入任务</span>
               </div>
             </div>
 
+            <!-- 选中记录后的四卡式详情面板 -->
             <div id="detail-content" class="detail hidden">
-              <div class="inspector-card raw-card">
-                <div class="detail-topline">
-                  <div id="detail-source" class="detail-source"></div>
-                  <span id="ai-status" class="badge"></span>
-                </div>
-
-                <div id="detail-image" class="detail-image hidden">
-                  <div class="block-title">原始截图附件</div>
-                  <div class="image-stage">
-                    <img id="detail-img" alt="记录附件" />
+              <!-- 卡片 1：AI 草稿主信息卡 -->
+              <div class="inspector-card draft-hero-card ai-card">
+                <div class="draft-status-bar">
+                  <div class="draft-status-left">
+                    <span class="draft-kicker">AI 草稿</span>
+                    <span class="draft-status-sep" aria-hidden="true"></span>
+                    <span id="ai-status" class="draft-state-pill">待确认</span>
+                    <span id="promotion-progress" class="draft-progress-pill hidden"></span>
                   </div>
-                </div>
 
-                <div class="raw-block">
-                  <div class="block-title">原始存证内容</div>
-                  <pre id="raw-text"></pre>
-                  <div class="ai-line">
-                    <span id="ai-model" class="model-tag"></span>
-                    <span class="detail-divider" aria-hidden="true"></span>
-                    <span class="immutable-note">原始记录只读保护</span>
-                    <div class="reparse-group">
-                      <select id="reparse-persona" class="persona-select" aria-label="选择专家身份重新解析" title="切换 AI 专家拆解视角">
+                  <div class="draft-status-right">
+                    <div id="f-item-wrap" class="item-switcher-inline hidden">
+                      <select id="f-item" aria-label="切换图中待办事项"></select>
+                      <span id="f-item-state" class="hidden"></span>
+                    </div>
+                    <div class="reparse-inline">
+                      <select id="reparse-persona" class="persona-select-inline" aria-label="选择专家身份重新解析" title="切换 AI 专家拆解视角">
                         <option value="auto">🤖 智能路由</option>
                         <option value="dev">💻 研发专家</option>
                         <option value="pm">📋 产品项目</option>
                         <option value="gtd">🎯 GTD 行动</option>
                       </select>
-                      <button id="btn-reparse" class="btn small ghost" type="button">↻ 重新解析</button>
+                      <button id="btn-reparse" class="reparse-btn-inline" type="button" title="按所选专家视角重新解析">↻</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="draft-hero-body">
+                  <input id="f-title" class="draft-hero-title" autocomplete="off" placeholder="输入清晰的任务标题…" aria-label="任务标题" />
+                  <textarea id="f-description" class="draft-hero-desc" rows="1" placeholder="补充上下文、执行要点或验收标准…" aria-label="任务描述"></textarea>
+                </div>
+
+                <div class="draft-meta-row">
+                  <div class="meta-popover-wrap" id="due-popover-wrap">
+                    <button id="due-picker-trigger" class="meta-item meta-due" type="button" aria-haspopup="dialog" aria-expanded="false" title="点击设置或修改截止时间">
+                      <svg class="meta-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                        <line x1="16" y1="2" x2="16" y2="6" />
+                        <line x1="8" y1="2" x2="8" y2="6" />
+                        <line x1="3" y1="10" x2="21" y2="10" />
+                      </svg>
+                      <strong id="due-friendly-main" class="meta-due-main">未设截止</strong>
+                      <span id="due-friendly-sub" class="meta-due-sub">（点击设置）</span>
+                    </button>
+                    <input id="f-due" class="hidden" type="datetime-local" aria-label="截止时间" />
+
+                    <div id="due-popover" class="meta-popover due-popover hidden" role="dialog" aria-label="设置截止时间">
+                      <div class="popover-section-title">快捷设置</div>
+                      <div class="due-preset-grid">
+                        <button type="button" class="due-preset-chip" data-due-preset="today-18">今天 18:00</button>
+                        <button type="button" class="due-preset-chip" data-due-preset="tomorrow-10">明天 10:00</button>
+                        <button type="button" class="due-preset-chip" data-due-preset="tomorrow-18">明天 18:00</button>
+                        <button type="button" class="due-preset-chip" data-due-preset="friday-18">本周五 18:00</button>
+                        <button type="button" class="due-preset-chip" data-due-preset="monday-10">下周一 10:00</button>
+                      </div>
+                      <div class="popover-section-title">自定义日期与时间</div>
+                      <div class="due-custom-row">
+                        <input id="f-due-date" type="date" class="due-custom-date" aria-label="截止日期" />
+                        <input id="f-due-time" type="time" class="due-custom-time" value="18:00" aria-label="截止时刻" />
+                      </div>
+                      <div class="due-popover-footer">
+                        <button type="button" id="btn-due-clear" class="due-clear-btn">清除截止</button>
+                        <button type="button" id="btn-due-done" class="due-done-btn">完成</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <span class="meta-row-divider" aria-hidden="true"></span>
+
+                  <div class="meta-popover-wrap" id="priority-popover-wrap">
+                    <button id="priority-picker-trigger" class="meta-item meta-priority" type="button" aria-haspopup="listbox" aria-expanded="false" title="点击切换优先级">
+                      <svg class="meta-icon flag-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                        <line x1="4" y1="22" x2="4" y2="15" />
+                      </svg>
+                      <span id="priority-friendly-label" class="meta-priority-text">高优先级</span>
+                    </button>
+                    <select id="f-priority" class="hidden" aria-label="优先级">
+                      <option value="P0">紧急优先级 (P0)</option>
+                      <option value="P1">高优先级 (P1)</option>
+                      <option value="P2">中优先级 (P2)</option>
+                      <option value="P3">低优先级 (P3)</option>
+                    </select>
+
+                    <div id="priority-popover" class="meta-popover priority-popover hidden" role="listbox" aria-label="选择任务优先级">
+                      <button type="button" class="priority-option opt-P0" data-prio="P0">
+                        <span class="prio-dot"></span>
+                        <span>紧急优先级 (P0)</span>
+                      </button>
+                      <button type="button" class="priority-option opt-P1" data-prio="P1">
+                        <span class="prio-dot"></span>
+                        <span>高优先级 (P1)</span>
+                      </button>
+                      <button type="button" class="priority-option opt-P2" data-prio="P2">
+                        <span class="prio-dot"></span>
+                        <span>中优先级 (P2)</span>
+                      </button>
+                      <button type="button" class="priority-option opt-P3" data-prio="P3">
+                        <span class="prio-dot"></span>
+                        <span>低优先级 (P3)</span>
+                      </button>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div class="inspector-card ai-card">
-                <div class="card-section-head">
-                  <div class="block-title">✨ AI 智能提炼</div>
-                  <span class="ai-spark-tag">AI INSIGHT</span>
+              <!-- 卡片 2：执行步骤与待补充提示卡 -->
+              <div class="inspector-card draft-steps-card draft-card">
+                <div class="steps-card-header">
+                  <h3 class="steps-card-title">执行步骤</h3>
+                  <button id="btn-add-draft-step" class="step-add-btn" type="button" title="添加一条执行步骤">+ 添加步骤</button>
                 </div>
-                <div id="ai-chips" class="ai-chips hidden"></div>
-                <div id="ai-summary" class="ai-summary"></div>
+
+                <div id="draft-steps-list" class="draft-steps-list" role="list" aria-label="执行步骤列表"></div>
+
+                <div id="draft-missing-bar" class="draft-missing-bar hidden">
+                  <span class="missing-dot" aria-hidden="true"></span>
+                  <span class="missing-prefix">待补充：</span>
+                  <span id="draft-missing-text" class="missing-content"></span>
+                </div>
               </div>
 
-              <div class="inspector-card draft-card">
-                <div class="draft-heading">
-                  <div>
-                    <div class="block-title">任务草稿编辑器</div>
-                    <div class="draft-help">可自由调整任意字段，点击下方按钮加入正式任务看板。</div>
+              <!-- 卡片 3：原始记录与更多属性抽屉 -->
+              <div class="inspector-card draft-raw-card raw-card">
+                <div class="raw-card-header">
+                  <div class="raw-card-title-wrap">
+                    <svg class="raw-doc-icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="8" y1="13" x2="16" y2="13" />
+                      <line x1="8" y1="17" x2="13" y2="17" />
+                    </svg>
+                    <h3 class="raw-card-title">原始记录</h3>
                   </div>
-                  <span id="promotion-progress" class="progress-note"></span>
+
+                  <button id="btn-toggle-more-props" class="more-props-toggle" type="button" aria-expanded="false">
+                    <span>更多属性</span>
+                    <svg class="chevron-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
                 </div>
 
-                <label class="full item-switcher hidden" id="f-item-wrap">
-                  <span class="switcher-label">🎯 图中识别出多项待办（可切换逐项转正）</span>
-                  <select id="f-item"></select>
-                  <span id="f-item-state" class="field-note"></span>
-                </label>
-
-                <label class="hero-title-field">
-                  <span class="field-caption">任务标题</span>
-                  <input id="f-title" class="hero-title-input" autocomplete="off" placeholder="输入清晰、有行动感的任务标题…" />
-                </label>
-
-                <div class="form-grid">
-                  <label>类型
-                    <select id="f-kind">
-                      <option value="task">🎯 任务 (Task)</option>
-                      <option value="requirement">📦 需求 (Requirement)</option>
-                      <option value="idea">💡 想法 (Idea)</option>
-                      <option value="note">📝 记录 (Note)</option>
-                    </select>
-                  </label>
-                  <label>优先级
-                    <select id="f-priority">
-                      <option value="P0">🔥 P0 · 紧急关键</option>
-                      <option value="P1">⚡ P1 · 高优先级</option>
-                      <option value="P2">🔹 P2 · 常规推进</option>
-                      <option value="P3">🌱 P3 · 低优暂缓</option>
-                    </select>
-                  </label>
-                  <label>状态
-                    <select id="f-status">
-                      <option value="todo">待办</option>
-                      <option value="in_progress">进行中</option>
-                      <option value="blocked">阻塞</option>
-                      <option value="done">完成</option>
-                    </select>
-                  </label>
-                  <label>预估工时（分钟） <input id="f-estimate" type="number" min="0" placeholder="如 60" /></label>
-                  <label>截止时间 <input id="f-due" type="datetime-local" /></label>
-                  <label>计划开始 <input id="f-start" type="datetime-local" /></label>
-                  <label class="span-2">计划结束 <input id="f-end" type="datetime-local" /></label>
+                <div class="raw-quote-block">
+                  <pre id="raw-text"></pre>
                 </div>
 
-                <label class="full">任务描述 <textarea id="f-description" placeholder="补充上下文、执行要点或验收标准…"></textarea></label>
-                <label class="full">分类标签 <input id="f-tags" placeholder="用逗号分隔，例如：产品设计, 本周重点" /></label>
-                <label class="full">子任务拆解 <textarea id="f-subtasks" rows="3" placeholder="每行一条子任务，转正时自动生成可勾选清单"></textarea></label>
-
-                <div class="row-actions">
-                  <button id="btn-promote" class="btn primary pill-btn" type="button">🚀 转为正式任务</button>
-                  <button id="btn-delete-inbox" class="btn danger-ghost pill-btn" type="button">忽略此记录</button>
+                <div id="detail-image" class="detail-image hidden">
+                  <div class="image-stage">
+                    <img id="detail-img" alt="记录附件" />
+                  </div>
                 </div>
+
+                <!-- 展开的更多属性与完整编辑器 -->
+                <div id="more-props-drawer" class="more-props-drawer hidden">
+                  <div class="more-props-meta">
+                    <span id="detail-source" class="detail-source"></span>
+                    <span id="ai-model" class="model-tag"></span>
+                  </div>
+
+                  <div id="ai-chips" class="ai-chips hidden"></div>
+                  <div id="ai-summary" class="ai-summary hidden"></div>
+
+                  <div class="form-grid more-props-grid">
+                    <label>类型
+                      <select id="f-kind">
+                        <option value="task">🎯 任务 (Task)</option>
+                        <option value="requirement">📦 需求 (Requirement)</option>
+                        <option value="idea">💡 想法 (Idea)</option>
+                        <option value="note">📝 记录 (Note)</option>
+                      </select>
+                    </label>
+                    <label>状态
+                      <select id="f-status">
+                        <option value="todo">待办</option>
+                        <option value="in_progress">进行中</option>
+                        <option value="blocked">阻塞</option>
+                        <option value="done">完成</option>
+                      </select>
+                    </label>
+                    <label>预估工时（分钟）
+                      <input id="f-estimate" type="number" min="0" placeholder="如 60" />
+                    </label>
+                    <label>分类标签
+                      <input id="f-tags" placeholder="用逗号分隔，例如：网关, 线上排障" />
+                    </label>
+                    <label>计划开始
+                      <input id="f-start" type="datetime-local" />
+                    </label>
+                    <label>计划结束
+                      <input id="f-end" type="datetime-local" />
+                    </label>
+                  </div>
+
+                  <label class="full">子任务文本（每行一条）
+                    <textarea id="f-subtasks" rows="3" placeholder="每行一条子任务，转正时自动生成可勾选清单"></textarea>
+                  </label>
+
+                  <div class="more-props-actions">
+                    <button id="btn-delete-inbox" class="btn danger-ghost small" type="button">忽略此条记录</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 卡片 4：底部只读守护承诺与主操作栏 -->
+              <div class="inspector-card draft-footer-bar">
+                <div class="footer-immutable-info">
+                  <svg class="lock-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <span>原始记录已保留，不会被修改</span>
+                </div>
+                <button id="btn-promote" class="btn primary cta-promote-btn" type="button">加入任务</button>
               </div>
             </div>
           </section>
         </div>
       </section>
 
-      <section id="view-tasks" class="view hidden" aria-labelledby="page-title">
+      <!-- 视图 2：正式任务看板 -->
+      <section id="view-tasks" class="view hidden" aria-label="正式任务视图">
         <div class="task-metrics-strip" aria-label="任务统计概览">
           <div class="metric-card accent-violet">
             <div class="metric-top">
@@ -299,7 +461,7 @@
           <div class="metric-card accent-amber">
             <div class="metric-top">
               <span class="metric-label">高优焦点 (P0/P1)</span>
-              <span class="metric-emoji" aria-hidden="true">🔥</span>
+              <span class="metric-emoji" aria-hidden="true">🚩</span>
             </div>
             <strong id="metric-urgent" class="metric-value">0</strong>
             <span class="metric-sub">优先集中精力攻克</span>
@@ -315,7 +477,7 @@
           <div class="metric-card accent-emerald">
             <div class="metric-top">
               <span class="metric-label">累计已完成</span>
-              <span class="metric-emoji" aria-hidden="true">🎉</span>
+              <span class="metric-emoji" aria-hidden="true">✨</span>
             </div>
             <strong id="metric-done" class="metric-value">0</strong>
             <span id="metric-rate" class="metric-sub">含已归档完成项</span>
@@ -337,7 +499,7 @@
               <span id="count-archived" class="tab-count">0</span>
             </button>
           </div>
-          <button id="btn-new-task" class="btn primary pill-btn" type="button">
+          <button id="btn-new-task" class="btn primary cta-promote-btn" type="button">
             <span class="icon icon-plus" aria-hidden="true"></span>
             <span>新建任务</span>
           </button>
@@ -350,12 +512,12 @@
                 <span class="search-icon icon icon-search" aria-hidden="true"></span>
                 <input id="task-filter" type="search" placeholder="搜索任务标题、描述或 #标签…" aria-label="搜索任务" autocomplete="off" />
               </label>
-              <div id="task-quick-filters" class="filter-pills" role="group" aria-label="优先级与状态快筛">
+              <div id="task-quick-filters" class="inbox-filter-pills" role="group" aria-label="优先级与状态快筛">
                 <button class="filter-pill active" data-task-quick="all" type="button">全部</button>
                 <button class="filter-pill" data-task-quick="P0" type="button">🔥 P0</button>
-                <button class="filter-pill" data-task-quick="P1" type="button">⚡ P1</button>
+                <button class="filter-pill" data-task-quick="P1" type="button">🚩 P1</button>
                 <button class="filter-pill" data-task-quick="overdue" type="button">⏰ 已逾期</button>
-                <button class="filter-pill" data-task-quick="subtasks" type="button">☑️ 含子任务</button>
+                <button class="filter-pill" data-task-quick="subtasks" type="button">☑️ 含步骤</button>
               </div>
             </div>
             <span id="tasks-count" class="list-count">0 项任务</span>
@@ -366,6 +528,7 @@
     </main>
   </div>
 
+  <!-- 设置弹窗 -->
   <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-hidden="true">
     <div class="modal-box settings-box">
       <div class="modal-head">
@@ -450,12 +613,13 @@
       </div>
 
       <div class="modal-foot">
-        <button id="btn-close-settings" class="btn secondary pill-btn" type="button">取消</button>
-        <button id="btn-save-settings" class="btn primary pill-btn" type="button">保存设置</button>
+        <button id="btn-close-settings" class="btn secondary" type="button">取消</button>
+        <button id="btn-save-settings" class="btn primary cta-promote-btn" type="button">保存设置</button>
       </div>
     </div>
   </div>
 
+  <!-- 任务编辑弹窗 -->
   <div id="task-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="e-modal-title" aria-hidden="true">
     <div class="modal-box task-box">
       <div class="modal-head">
@@ -494,7 +658,7 @@
             <label>优先级
               <select id="e-priority">
                 <option value="P0">🔥 P0 · 紧急关键</option>
-                <option value="P1">⚡ P1 · 高优先级</option>
+                <option value="P1">🚩 P1 · 高优先级</option>
                 <option value="P2">🔹 P2 · 常规推进</option>
                 <option value="P3">🌱 P3 · 低优暂缓</option>
               </select>
@@ -511,21 +675,21 @@
         </div>
 
         <div class="modal-section">
-          <h3>☑️ 子任务清单</h3>
+          <h3>☑️ 执行步骤清单</h3>
           <div id="e-subtasks-zone">
             <div id="e-subtasks" class="subtask-list"></div>
             <div class="subtask-add">
               <input id="e-subtask-new" type="text" placeholder="添加一个新的执行步骤，回车即可保存…" />
-              <button id="e-subtask-add" class="btn small primary pill-btn" type="button">添加步骤</button>
+              <button id="e-subtask-add" class="btn small primary" type="button">添加步骤</button>
             </div>
           </div>
-          <textarea id="e-subtasks-new" class="hidden" rows="3" placeholder="每行一条子任务（可选）"></textarea>
+          <textarea id="e-subtasks-new" class="hidden" rows="3" placeholder="每行一条执行步骤（可选）"></textarea>
         </div>
       </div>
 
       <div class="modal-foot">
-        <button id="btn-close-task" class="btn secondary pill-btn" type="button">取消</button>
-        <button id="btn-save-task" class="btn primary pill-btn" type="button">保存修改</button>
+        <button id="btn-close-task" class="btn secondary" type="button">取消</button>
+        <button id="btn-save-task" class="btn primary cta-promote-btn" type="button">保存修改</button>
       </div>
     </div>
   </div>
