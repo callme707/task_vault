@@ -1,6 +1,6 @@
 [package]
 name = "task-vault"
-version = "1.2.0"
+version = "1.2.5"
 description = "任务记录工具：快速记录，AI 整理，主库排期"
 edition = "2021"
 rust-version = "1.77.2"

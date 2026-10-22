@@ -9,15 +9,19 @@
 <body>
   <div id="quick-stage" class="quick-stage">
     <main class="quick-card" aria-label="快速记录">
-      <div class="quick-scanlines" aria-hidden="true"></div>
+      <div class="quick-light-beam" aria-hidden="true"></div>
       <div class="quick-glow" aria-hidden="true"></div>
-      <div class="quick-aurora-bar" aria-hidden="true"></div>
+
       <div class="quick-head" data-tauri-drag-region title="按住可拖动窗口">
         <div class="quick-brand">
-          <span class="quick-mark" aria-hidden="true">TV</span>
+          <span class="quick-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+              <path d="M12 2.5C12.7 7.1 16.9 11.3 21.5 12C16.9 12.7 12.7 16.9 12 21.5C11.3 16.9 7.1 12.7 2.5 12C7.1 11.3 11.3 7.1 12 2.5Z" />
+            </svg>
+          </span>
           <div class="quick-title-group">
-            <span class="quick-title">⚡ 灵感速记</span>
-            <span class="quick-sub">AI 自动提炼 · 本地加密</span>
+            <span class="quick-title">快速记录</span>
+            <span class="quick-sub">AI 草稿提炼</span>
           </div>
         </div>
         <div class="quick-hint">
@@ -40,7 +44,13 @@
 
       <div class="actions">
         <div class="footer-left">
-          <div id="input-help" class="input-help">原始文本与截图将保存在灵感收集箱，AI 提炼后供你确认。</div>
+          <div id="input-help" class="input-help">
+            <svg class="lock-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            <span>原始记录保留在收集箱，不会被修改</span>
+          </div>
           <span id="status" role="status" aria-live="polite"></span>
         </div>
         <div class="action-buttons">
@@ -65,7 +75,7 @@
             </div>
           </div>
           <button id="btn-cancel" class="btn" type="button">隐藏</button>
-          <button id="btn-save" class="btn primary" type="button">✨ 保存记录</button>
+          <button id="btn-save" class="btn primary" type="button">保存记录</button>
         </div>
       </div>
     </main>

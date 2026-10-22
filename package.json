@@ -1,6 +1,6 @@
 {
   "name": "task-vault",
-  "version": "1.2.0",
+  "version": "1.2.5",
   "private": true,
   "description": "Local-first, AI-powered desktop inbox and task management workbench for Windows (Rust + Tauri 2 + Vanilla JS)",
   "license": "ISC",

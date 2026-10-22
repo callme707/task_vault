@@ -41,6 +41,9 @@
   }
 
   function setMaximizeState(button, maximized) {
+    if (typeof document !== "undefined" && document.documentElement) {
+      document.documentElement.classList.toggle("window-maximized", Boolean(maximized));
+    }
     if (!button) return;
     const label = maximized ? "还原窗口" : "最大化窗口";
     button.dataset.windowState = maximized ? "maximized" : "normal";
