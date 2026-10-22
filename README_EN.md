@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 # TaskVault
 
@@ -10,7 +10,7 @@
 [![Frontend](https://img.shields.io/badge/frontend-Vanilla%20JS%20(Zero--Build)-10b981.svg)](#architecture)
 [![Security](https://img.shields.io/badge/security-Windows%20DPAPI-8b5cf6.svg)](#data-security--privacy)
 
-[绠€浣撲腑鏂嘳(README.md) | **English** 路 [Changelog](CHANGELOG.md)
+[简体中文](README.md) | **English** · [Changelog](CHANGELOG.md)
 
 </div>
 
@@ -34,17 +34,17 @@ Core Design Principles:
 
 ![TaskVault Workflow Demo](docs/screenshots/demo-workflow.gif)
 
-### 鈽€锔?Sunlit Aurora (Light Mode) 路 Inbox Studio & AI Inspector
+### ☀️ Sunlit Aurora (Light Mode) · Inbox Studio & AI Inspector
 Select any captured entry on the left to trigger a spring-physics cascading inspection view with expert routing badges, confidence scores, and an interactive draft editor:
 
-![Light Mode 路 Inbox Studio & AI Inspector](docs/screenshots/inbox-light.png)
+![Light Mode · Inbox Studio & AI Inspector](docs/screenshots/inbox-light.png)
 
-### 馃寵 Electric Aurora (Dark Mode) 路 Formal Task Bento Board
+### 🌙 Electric Aurora (Dark Mode) · Formal Task Bento Board
 Track active, high-priority (`P0`/`P1`), overdue, and completed tasks at a glance with real-time Bento metric cards and multi-dimensional capsule filters:
 
-![Dark Mode 路 Formal Task Bento Board](docs/screenshots/tasks-dark.png)
+![Dark Mode · Formal Task Bento Board](docs/screenshots/tasks-dark.png)
 
-### 鈿?`Ctrl+Alt+Q` Quick Capture Popup
+### ⚡ `Ctrl+Alt+Q` Quick Capture Popup
 A frameless, neon-accented spotlight popup supporting instant text input, clipboard screenshot paste (`Ctrl+V`), drag-and-drop images, and per-item expert persona selection:
 
 ![Quick Capture Popup with Persona Menu](docs/screenshots/quick-capture.png)
@@ -55,21 +55,21 @@ A frameless, neon-accented spotlight popup supporting instant text input, clipbo
 
 ### 1. Frictionless Text & Multimodal Screenshot Capture
 - **Global System Shortcuts**: Toggle the Quick Capture popup via `Ctrl+Alt+Q` or summon the main workbench via `Ctrl+Alt+W` from any application.
-- **Multi-Item Vision Extraction**: A single chat or meeting screenshot is preserved as one immutable inbox record while the vision model extracts multiple distinct action items鈥攅ach individually reviewable and promotable.
+- **Multi-Item Vision Extraction**: A single chat or meeting screenshot is preserved as one immutable inbox record while the vision model extracts multiple distinct action items—each individually reviewable and promotable.
 - **Truncated JSON Salvage Engine**: Automatically recovers valid completed items from partially truncated LLM/VLM outputs and flags them as `partial` ("Needs Review") instead of discarding the entire response.
 
 ### 2. Jev-Style Pre-Decision Slot & Expert Persona Routing
-- **System-1 In-Prompt Routing**: In the default `馃 Auto-Adaptive` mode, the model outputs a typed `"persona"` decision in the very first JSON field (`"dev"` | `"pm"` | `"gtd"`), leveraging autoregressive attention to lock into the corresponding expert decomposition rubric:
-  - **`馃捇 Engineering & Architecture (dev)`**: Breaks tasks into *Reproduction & Log Triage 鈫?Root-Cause Fix / API Implementation 鈫?Integration Testing 鈫?Rollout & Verification*, while flagging missing environment or TraceID details.
-  - **`馃搵 Product & Project Management (pm)`**: Breaks tasks into *Scope Alignment 鈫?Solution & Schedule Review 鈫?Definition of Done (DoD) 鈫?Stakeholder Sync*, while flagging missing owners or deadlines.
-  - **`馃幆 GTD Action Coach (gtd)`**: Eliminates vague verbs ("follow up", "look into") and decomposes goals into concrete 15鈥?0 minute physical Next Actions.
+- **System-1 In-Prompt Routing**: In the default `🤖 Auto-Adaptive` mode, the model outputs a typed `"persona"` decision in the very first JSON field (`"dev"` | `"pm"` | `"gtd"`), leveraging autoregressive attention to lock into the corresponding expert decomposition rubric:
+  - **`💻 Engineering & Architecture (dev)`**: Breaks tasks into *Reproduction & Log Triage → Root-Cause Fix / API Implementation → Integration Testing → Rollout & Verification*, while flagging missing environment or TraceID details.
+  - **`📋 Product & Project Management (pm)`**: Breaks tasks into *Scope Alignment → Solution & Schedule Review → Definition of Done (DoD) → Stakeholder Sync*, while flagging missing owners or deadlines.
+  - **`🎯 GTD Action Coach (gtd)`**: Eliminates vague verbs ("follow up", "look into") and decomposes goals into concrete 15–30 minute physical Next Actions.
 - **Tag Taxonomy Injection**: Automatically injects the top 20 most frequent tags from your existing task database into the prompt context so the AI reuses established tags rather than inventing synonyms.
 - **Relative Calendar Anchoring**: Injects a 10-day relative date lookup table (`Today / Tomorrow / This Sat / Next Mon = yyyy-MM-dd`) into every request for accurate deadline resolution.
 
 ### 3. Full-Lifecycle Task Management
 - **Three-Stage Buckets**: Organize formal tasks across **Active**, **Completed**, and **Archived** views with instant search and quick-filter capsules.
 - **Idempotent Atomic Promotion**: Promoting an inbox item commits the formal task, subtasks, source snapshot, and promotion marker in a single atomic transaction, succeeding only after the DPAPI-encrypted snapshot is safely persisted to disk.
-- **Independent Subtasks & Progress Tracking**: Manage priorities (`P0`鈥揱P3`), estimated vs. actual minutes, planned start/end times, completion percentages, and interactive subtask checklists.
+- **Independent Subtasks & Progress Tracking**: Manage priorities (`P0`–`P3`), estimated vs. actual minutes, planned start/end times, completion percentages, and interactive subtask checklists.
 
 ### 4. Local-First Security & Non-Blocking Architecture
 - **End-to-End Windows DPAPI Protection**: SQLite runs in memory for instant responsiveness and atomically writes DPAPI-encrypted snapshots to disk on every mutation. Attachments and API keys are likewise DPAPI-encrypted.
@@ -95,8 +95,8 @@ A frameless, neon-accented spotlight popup supporting instant text input, clipbo
 
 ```mermaid
 flowchart LR
-  subgraph Frontend["Static Frontend (ui/ 路 Zero-Build Vanilla JS)"]
-    MainUI["index.html + main.css + main.js<br/>(Main Workbench 路 Dual-Theme Aurora Bento)"]
+  subgraph Frontend["Static Frontend (ui/ · Zero-Build Vanilla JS)"]
+    MainUI["index.html + main.css + main.js<br/>(Main Workbench · Dual-Theme Aurora Bento)"]
     QuickUI["quick.html + quick.css + quick.js<br/>(Quick Capture Popup)"]
     WinCtrl["window-controls.js<br/>(Custom Frameless Titlebar)"]
   end
@@ -139,7 +139,7 @@ flowchart LR
 
 ### 1. Direct Download (Recommended for End Users)
 
-No build tools required鈥攄ownload the latest pre-built Windows binaries directly from **[GitHub Releases](https://github.com/callme707/task_vault/releases/latest)**:
+No build tools required—download the latest pre-built Windows binaries directly from **[GitHub Releases](https://github.com/callme707/task_vault/releases/latest)**:
 
 | Release Asset | Description |
 | :--- | :--- |
