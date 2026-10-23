@@ -34,11 +34,29 @@ function Refresh-SessionPath {
     $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
     $cargoBin = Join-Path $env:USERPROFILE ".cargo\bin"
-    $env:Path = "$cargoBin;$userPath;$machinePath"
+    $wingetLinks = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Links"
+    $env:Path = "$cargoBin;$wingetLinks;$userPath;$machinePath"
 }
 
 function Test-CommandExists([string]$Name) {
     return $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
+}
+
+function Resolve-CargoTool([string]$Name) {
+    # Wait up to 5 seconds in case rustup self-update is replacing binaries on Windows
+    for ($i = 0; $i -lt 10; $i++) {
+        Refresh-SessionPath
+        $cargoCandidate = Join-Path $env:USERPROFILE ".cargo\bin\$Name.exe"
+        if (Test-Path $cargoCandidate) {
+            return $cargoCandidate
+        }
+        $cmd = Get-Command $Name -ErrorAction SilentlyContinue
+        if ($null -ne $cmd) {
+            return $cmd.Source
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    return $null
 }
 
 function Test-WebView2Installed {
@@ -73,8 +91,9 @@ function Test-MsvcInstalled {
 }
 
 function Get-RustcVersion {
-    if (-not (Test-CommandExists "rustc")) { return $null }
-    $out = (& rustc --version 2>$null) -join ""
+    $rustcCmd = Resolve-CargoTool "rustc"
+    if (-not $rustcCmd) { return $null }
+    $out = (& $rustcCmd --version 2>$null) -join ""
     if ($out -match "rustc\s+(\d+\.\d+\.\d+)") {
         return $Matches[1]
     }
@@ -82,8 +101,9 @@ function Get-RustcVersion {
 }
 
 function Test-TauriCliInstalled {
-    if (-not (Test-CommandExists "cargo")) { return $null }
-    $out = (& cargo tauri --version 2>$null) -join ""
+    $cargoCmd = Resolve-CargoTool "cargo"
+    if (-not $cargoCmd) { return $null }
+    $out = (& $cargoCmd tauri --version 2>$null) -join ""
     if ($LASTEXITCODE -eq 0 -and $out) {
         return $out.Trim()
     }
@@ -99,7 +119,10 @@ function Get-NodeVersion {
     return $null
 }
 
-Write-Header "TaskVault Environment Doctor & Setup (v1.2.0)"
+Write-Header "TaskVault Developer Environment Doctor & Setup (v1.2.5)"
+Write-Host "  [TIP] If you only want to USE TaskVault (without compiling source code)," -ForegroundColor Yellow
+Write-Host "        you do NOT need to run this script. Download the ready-to-run installer at:" -ForegroundColor Yellow
+Write-Host "        https://github.com/callme707/task_vault/releases/latest" -ForegroundColor Green
 
 Refresh-SessionPath
 
@@ -193,17 +216,22 @@ if ($missing.Count -gt 0) {
     }
 
     if (-not $rustcOk) {
-        if (-not (Test-CommandExists "rustup")) {
+        $rustupCmd = Resolve-CargoTool "rustup"
+        if (-not $rustupCmd) {
             Write-Host "-> Installing Rustup..." -ForegroundColor Cyan
             & winget install --id Rustlang.Rustup -e --accept-source-agreements --accept-package-agreements
-            Refresh-SessionPath
+            $rustupCmd = Resolve-CargoTool "rustup"
         }
-        if (Test-CommandExists "rustup") {
+        if ($rustupCmd) {
             Write-Host "-> Configuring Rust stable-x86_64-pc-windows-msvc toolchain..." -ForegroundColor Cyan
-            & rustup toolchain install stable-x86_64-pc-windows-msvc
-            & rustup default stable-x86_64-pc-windows-msvc
-            & rustup component add clippy rustfmt
+            & $rustupCmd toolchain install stable-x86_64-pc-windows-msvc --no-self-update
+            $rustupCmd = Resolve-CargoTool "rustup"
+            & $rustupCmd default stable-x86_64-pc-windows-msvc
+            & $rustupCmd component add clippy rustfmt
             Refresh-SessionPath
+        } else {
+            Write-Host "[WARN] Rustup was installed, but PATH requires a new terminal session. Please re-run setup-env.bat." -ForegroundColor Yellow
+            exit 1
         }
     }
 
@@ -213,9 +241,10 @@ if ($missing.Count -gt 0) {
         Refresh-SessionPath
     }
 
-    if (-not $tauriVer -and (Test-CommandExists "cargo")) {
+    $cargoCmd = Resolve-CargoTool "cargo"
+    if (-not $tauriVer -and $cargoCmd) {
         Write-Host "-> Installing Tauri CLI (tauri-cli ^2.0.0)..." -ForegroundColor Cyan
-        & cargo install tauri-cli --version "^2.0.0" --locked
+        & $cargoCmd install tauri-cli --version "^2.0.0" --locked
         Refresh-SessionPath
     }
 }
@@ -231,11 +260,12 @@ try {
         & node ui/tests/time-format.test.js
         & node ui/tests/task-views.test.js
     }
-    if (Test-CommandExists "cargo") {
+    $cargoCmd = Resolve-CargoTool "cargo"
+    if ($cargoCmd) {
         Write-Host "-> Verifying Rust crate dependencies (cargo check)..." -ForegroundColor Cyan
         Push-Location (Join-Path $repoRoot "src-tauri")
         try {
-            & cargo check --locked
+            & $cargoCmd check --locked
         } finally {
             Pop-Location
         }
